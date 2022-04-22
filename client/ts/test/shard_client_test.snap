@@ -1,0 +1,13 @@
+{
+  'ShardClient.stat test': {
+    status: 'OK',
+    readThrough: {
+      'acmeCo/source-hello-world/eof': '[MASKED string]',
+      'acmeCo/source-hello-world/txn': '[MASKED string]',
+    },
+    publishAt: {
+      'acmeCo/greetings/pivot=00': '[MASKED string]',
+      'ops/acmeCo/stats/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00': '[MASKED string]',
+    },
+  },
+}

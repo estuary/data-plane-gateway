@@ -1,4 +1,4 @@
-default: gen_rest_broker gen_rest_consumer
+default: gen_rest_broker gen_rest_consumer gen_js_client
 
 gen_rest_broker:
 	./build.sh broker
@@ -6,8 +6,11 @@ gen_rest_broker:
 gen_rest_consumer:
 	./build.sh consumer
 
+gen_js_client:
+	deno bundle client/ts/src/index.ts client/js/client.js
+
 clean:
-	rm -rf gen/*
+	rm -rf gen/* client/js/*
 
 protoc-gen-gogo:
 	go mod download github.com/golang/protobuf
