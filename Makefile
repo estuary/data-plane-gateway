@@ -9,6 +9,9 @@ gen_rest_consumer:
 clean:
 	rm -rf gen/*
 
-protoc-gen-gogo:
-	go mod download github.com/golang/protobuf
-	go build -o $@ github.com/gogo/protobuf/protoc-gen-gogo
+protobuf_tools:
+	go install \
+		github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway \
+		github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger \
+		github.com/golang/protobuf/protoc-gen-go \
+		github.com/gogo/protobuf/protoc-gen-gogo
