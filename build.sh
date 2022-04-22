@@ -61,3 +61,11 @@ sed -i -E "s#import \\(#import \\(${alias} \"${pkgpath}\"#g" "${gwfile}"
 sed -i -E "s#([ (])([a-zA-Z0-9_]*(Client|Server|Request)([^(]|$))#\\1${alias}.\\2#g" "${gwfile}"
 sed -i -E "s# (New[a-zA-Z0-9_]*Client\\()# ${alias}.\\1#g" "${gwfile}"
 go fmt "${gwfile}"
+
+# Generate low-level typescript clients from swagger.
+npx swagger-typescript-api \
+  -p gen/${SERVICE}/protocol/protocol.swagger.json \
+  -o client/src/gen/${SERVICE}/protocol/ \
+  -n ${SERVICE}.ts \
+  --responses \
+  --union-enums
