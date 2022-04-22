@@ -10,7 +10,7 @@ gen_js_client:
 	deno run --allow-read --allow-env --allow-write --allow-run=npm client/bin/build_package.ts
 
 clean:
-	rm -rf gen/* client/dist/* client/src/gen/*
+	rm -rf gen/* client/dist/* client/src/gen/* test/tmp/*
 
 .PHONY: test
 test:
