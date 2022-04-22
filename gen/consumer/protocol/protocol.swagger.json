@@ -1,0 +1,670 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "consumer/protocol/protocol.proto",
+    "version": "version not set"
+  },
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/shards/list": {
+      "post": {
+        "summary": "List Shards, their ShardSpecs and their processing status.",
+        "operationId": "Shard_List",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/consumerListResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/consumerListRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Shard"
+        ]
+      }
+    },
+    "/v1/shards/stat": {
+      "post": {
+        "summary": "Stat returns detailed status of a given Shard.",
+        "operationId": "Shard_Stat",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/consumerStatResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/consumerStatRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Shard"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "GetHintsResponseResponseHints": {
+      "type": "object",
+      "properties": {
+        "hints": {
+          "$ref": "#/definitions/recoverylogFSMHints",
+          "description": "If the hints value does not exist Hints will be nil."
+        }
+      }
+    },
+    "HeaderEtcd": {
+      "type": "object",
+      "properties": {
+        "clusterId": {
+          "type": "string",
+          "format": "uint64",
+          "description": "cluster_id is the ID of the cluster."
+        },
+        "memberId": {
+          "type": "string",
+          "format": "uint64",
+          "description": "member_id is the ID of the member."
+        },
+        "revision": {
+          "type": "string",
+          "format": "int64",
+          "description": "revision is the Etcd key-value store revision when the request was\napplied."
+        },
+        "raftTerm": {
+          "type": "string",
+          "format": "uint64",
+          "description": "raft_term is the raft term when the request was applied."
+        }
+      },
+      "description": "Etcd represents the effective Etcd MVCC state under which a Gazette broker\nis operating in its processing of requests and responses. Its inclusion\nallows brokers to reason about relative \"happened before\" Revision ordering\nof apparent routing conflicts in proxied or replicated requests, as well\nas enabling sanity checks over equality of Etcd ClusterId (and precluding,\nfor example, split-brain scenarios where different brokers are backed by\ndifferent Etcd clusters). Etcd is kept in sync with\netcdserverpb.ResponseHeader."
+    },
+    "ListResponseShard": {
+      "type": "object",
+      "properties": {
+        "spec": {
+          "$ref": "#/definitions/consumerShardSpec"
+        },
+        "modRevision": {
+          "type": "string",
+          "format": "int64",
+          "description": "Current ModRevision of the ShardSpec."
+        },
+        "route": {
+          "$ref": "#/definitions/protocolRoute",
+          "description": "Route of the shard, including endpoints."
+        },
+        "status": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/consumerReplicaStatus"
+          },
+          "description": "Status of each replica. Cardinality and ordering matches |route|."
+        }
+      },
+      "description": "Shards of the response."
+    },
+    "ProcessSpecID": {
+      "type": "object",
+      "properties": {
+        "zone": {
+          "type": "string",
+          "description": "\"Zone\" in which the process is running. Zones may be AWS, Azure, or\nGoogle Cloud Platform zone identifiers, or rack locations within a colo,\nor given some other custom meaning. Gazette will replicate across\nmultiple zones, and seeks to minimize traffic which must cross zones (for\nexample, by proxying reads to a broker in the current zone)."
+        },
+        "suffix": {
+          "type": "string",
+          "description": "Unique suffix of the process within |zone|. It is permissible for a\nsuffix value to repeat across zones, but never within zones. In practice,\nit's recommended to use a FQDN, Kubernetes Pod name, or comparable unique\nand self-describing value as the ID suffix."
+        }
+      },
+      "description": "ID composes a zone and a suffix to uniquely identify a ProcessSpec."
+    },
+    "ReplicaStatusCode": {
+      "type": "string",
+      "enum": [
+        "IDLE",
+        "BACKFILL",
+        "STANDBY",
+        "PRIMARY",
+        "FAILED"
+      ],
+      "default": "IDLE",
+      "description": " - BACKFILL: The replica is actively playing the historical recovery log.\n - STANDBY: The replica has finished playing the historical recovery log and is\nlive-tailing it to locally mirror recorded operations as they are\nproduced. It can take over as primary at any time.\n\nShards not having recovery logs immediately transition to STANDBY.\n - PRIMARY: The replica is actively serving as primary.\n - FAILED: The replica has encountered an unrecoverable error."
+    },
+    "consumerApplyRequestChange": {
+      "type": "object",
+      "properties": {
+        "expectModRevision": {
+          "type": "string",
+          "format": "int64",
+          "description": "Expected ModRevision of the current ShardSpec. If the shard is being\ncreated, expect_mod_revision is zero."
+        },
+        "upsert": {
+          "$ref": "#/definitions/consumerShardSpec",
+          "description": "ShardSpec to be updated (if expect_mod_revision \u003e 0) or created\n(if expect_mod_revision == 0)."
+        },
+        "delete": {
+          "type": "string",
+          "description": "Shard to be deleted. expect_mod_revision must not be zero."
+        }
+      },
+      "description": "Change defines an insertion, update, or deletion to be applied to the set\nof ShardSpecs. Exactly one of |upsert| or |delete| must be set."
+    },
+    "consumerApplyResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/consumerStatus",
+          "description": "Status of the Apply RPC."
+        },
+        "header": {
+          "$ref": "#/definitions/protocolHeader",
+          "description": "Header of the response."
+        },
+        "extension": {
+          "type": "string",
+          "format": "byte",
+          "description": "Optional extension of the ApplyResponse."
+        }
+      }
+    },
+    "consumerGetHintsResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/consumerStatus",
+          "description": "Status of the Hints RPC."
+        },
+        "header": {
+          "$ref": "#/definitions/protocolHeader",
+          "description": "Header of the response."
+        },
+        "primaryHints": {
+          "$ref": "#/definitions/GetHintsResponseResponseHints",
+          "description": "Primary hints for the shard."
+        },
+        "backupHints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GetHintsResponseResponseHints"
+          },
+          "description": "List of backup hints for a shard. The most recent recovery log hints will\nbe first, any subsequent hints are for historical backup. If there is no\nvalue for a hint key the value corresponding hints will be nil."
+        },
+        "extension": {
+          "type": "string",
+          "format": "byte",
+          "description": "Optional extension of the GetHintsResponse."
+        }
+      }
+    },
+    "consumerListRequest": {
+      "type": "object",
+      "properties": {
+        "selector": {
+          "$ref": "#/definitions/protocolLabelSelector",
+          "description": "Selector optionally refines the set of shards which will be enumerated.\nIf zero-valued, all shards are returned. Otherwise, only ShardSpecs\nmatching the LabelSelector will be returned. One meta-label \"id\" is\nadditionally supported by the selector, where \"id=example-shard-ID\"\nwill match a ShardSpec with ID \"example-shard-ID\"."
+        },
+        "extension": {
+          "type": "string",
+          "format": "byte",
+          "description": "Optional extension of the ListRequest."
+        }
+      }
+    },
+    "consumerListResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/consumerStatus",
+          "description": "Status of the List RPC."
+        },
+        "header": {
+          "$ref": "#/definitions/protocolHeader",
+          "description": "Header of the response."
+        },
+        "shards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ListResponseShard"
+          }
+        },
+        "extension": {
+          "type": "string",
+          "format": "byte",
+          "description": "Optional extension of the ListResponse."
+        }
+      }
+    },
+    "consumerReplicaStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/definitions/ReplicaStatusCode"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Errors encountered during replica processing. Set iff |code| is FAILED."
+        }
+      },
+      "description": "ReplicaStatus is the status of a ShardSpec assigned to a ConsumerSpec.\nIt serves as an allocator AssignmentValue. ReplicaStatus is reduced by taking\nthe maximum enum value among statuses. Eg, if a primary is PRIMARY, one\nreplica is BACKFILL and the other STANDBY, then the status is PRIMARY. If one\nof the replicas transitioned to FAILED, than the status is FAILED. This\nreduction behavior is used to summarize status across all replicas."
+    },
+    "consumerShardSpec": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID of the shard."
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/consumerShardSpecSource"
+          },
+          "description": "Sources of the shard, uniquely ordered on Source journal."
+        },
+        "recoveryLogPrefix": {
+          "type": "string",
+          "description": "Prefix of the Journal into which the shard's recovery log will be recorded.\nThe complete Journal name is built as \"{recovery_log_prefix}/{shard_id}\".\nIf empty, the shard does not use a recovery log."
+        },
+        "hintPrefix": {
+          "type": "string",
+          "description": "\"{hint_prefix}/{shard_id}.primary\"\n\nThe primary will regularly produce updated hints into this key, and\nplayers of the log will similarly utilize hints from this key.\nIf |recovery_log_prefix| is set, |hint_prefix| must be also.",
+          "title": "Prefix of Etcd keys into which recovery log FSMHints are written to and\nread from. FSMHints allow readers of the recovery log to efficiently\ndetermine the minimum fragments of log which must be read to fully recover\nlocal store state. The complete hint key written by the shard primary is:"
+        },
+        "hintBackups": {
+          "type": "integer",
+          "format": "int32",
+          "description": "\"{hints_prefix}/{shard_id}.backup.0\".\n\nIt also move hints previously stored under\n\"{hints_prefix/{shard_id}.backup.0\" to\n\"{hints_prefix/{shard_id}.backup.1\", and so on, keeping at most\n|hint_backups| distinct sets of FSMHints.\n\nIn the case of disaster or data-loss, these copied hints can be an\nimportant fallback for recovering a consistent albeit older version of the\nshard's store, with each relying on only progressively older portions of\nthe recovery log.\n\nWhen pruning the recovery log, log fragments which are older than (and no\nlonger required by) the *oldest* backup are discarded, ensuring that\nall hints remain valid for playback.",
+          "title": "Backups of verified recovery log FSMHints, retained as a disaster-recovery\nmechanism. On completing playback, a player will write recovered hints to:"
+        },
+        "maxTxnDuration": {
+          "type": "string",
+          "description": "Max duration of shard transactions. This duration upper-bounds the amount\nof time during which a transaction may process messages before it must\nflush and commit. It may run for less time if an input message stall occurs\n(eg, no decoded journal message is ready without blocking). A typical value\nwould be `1s`: applications which perform extensive aggregation over\nmessage streams exhibiting locality of \"hot\" keys may benefit from larger\nvalues."
+        },
+        "minTxnDuration": {
+          "type": "string",
+          "description": "Min duration of shard transactions. This duration lower-bounds the amount\nof time during which a transaction must process messages before it may\nflush and commit. It may run for more time if additional messages are\navailable (eg, decoded journal messages are ready without blocking). Note\nalso that transactions are pipelined: a current transaction may process\nmessages while a prior transaction's recovery log writes flush to Gazette,\nbut it cannot prepare to commit until the prior transaction writes\ncomplete. In other words even if |min_txn_quantum| is zero, some degree of\nmessage batching is expected due to the network delay inherent in Gazette\nwrites. A typical value of would be `0s`: applications which perform\nextensive aggregation may benefit from larger values."
+        },
+        "disable": {
+          "type": "boolean",
+          "description": "Disable processing of the shard."
+        },
+        "hotStandbys": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Hot standbys is the desired number of consumer processes which should be\nreplicating the primary consumer's recovery log. Standbys are allocated in\na separate availability zone of the current primary, and tail the live log\nto continuously mirror the primary's on-disk DB file structure. Should the\nprimary experience failure, one of the hot standbys will be assigned to\ntake over as the new shard primary, which is accomplished by simply opening\nits local copy of the recovered store files.\n\nNote that under regular operation, shard hand-off is zero downtime even if\nstandbys are zero, as the current primary will not cede ownership until the\nreplacement process declares itself ready. However, without standbys a\nprocess failure will leave the shard without an active primary while its\nreplacement starts and completes playback of its recovery log."
+        },
+        "labels": {
+          "$ref": "#/definitions/protocolLabelSet",
+          "description": "User-defined Labels of this ShardSpec. The label \"id\" is reserved and may\nnot be used with a ShardSpec's labels."
+        },
+        "disableWaitForAck": {
+          "type": "boolean",
+          "description": "Disable waiting for acknowledgements of pending message(s).\n\nIf a consumer transaction reads uncommitted messages, it will by default\nremain open (subject to the max duration) awaiting an acknowledgement of\nthose messages, in the hope that that acknowledgement will be quickly\nforthcoming and, by remaining open, we can process all messages in this\ntransaction. Effectively we're trading a small amount of increased local\nlatency for a global reduction in end-to-end latency.\n\nThis works well for acyclic message flows, but can introduce unnecessary\nstalls if there are message cycles between shards. In the simplest case,\na transaction could block awaiting an ACK of a message that it itself\nproduced -- an ACK which can't arrive until the transaction closes."
+        },
+        "ringBufferSize": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Size of the ring buffer used to sequence read-uncommitted messages\ninto consumed, read-committed ones. The ring buffer is a performance\noptimization only: applications will replay portions of journals as\nneeded when messages aren't available in the buffer.\nIt can remain small if source journal transactions are small,\nbut larger transactions will achieve better performance with a\nlarger ring.\nIf zero, a reasonable default (currently 8192) is used."
+        },
+        "readChannelSize": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Size of the channel used to bridge message read and decode with\nsequencing and consumption. Larger values may reduce data stalls,\nparticularly for larger transactions and/or bursty custom\nMessageProducer implementations.\nIf zero, a reasonable default (currently 8192) is used."
+        }
+      },
+      "description": "ShardSpec describes a shard and its configuration, and is the long-lived unit\nof work and scaling for a consumer application. Each shard is allocated to a\none \"primary\" at-a-time selected from the current processes of a consumer\napplication, and is re-assigned on process fault or exit.\n\nShardSpecs describe all configuration of the shard and its processing,\nincluding journals to consume, configuration for processing transactions, its\nrecovery log, hot standbys, etc. ShardSpecs may be further extended with\ndomain-specific labels \u0026 values to further define application behavior.\nShardSpec is-a allocator.ItemValue."
+    },
+    "consumerShardSpecSource": {
+      "type": "object",
+      "properties": {
+        "journal": {
+          "type": "string",
+          "description": "Journal which this shard is consuming."
+        },
+        "minOffset": {
+          "type": "string",
+          "format": "int64",
+          "description": "Minimum journal byte offset the shard should begin reading from.\nTypically this should be zero, as read offsets are check-pointed and\nrestored from the shard's Store as it processes. |min_offset| can be\nuseful for shard initialization, directing it to skip over historical\nportions of the journal not needed for the application's use case."
+        }
+      },
+      "description": "Sources define the set of journals which this shard consumes. At least one\nSource must be specified, and in many use cases only one will be needed.\nFor use cases which can benefit, multiple sources may be specified to\nrepresent a \"join\" over messages of distinct journals.\n\nNote the effective mapping of messages to each of the joined journals\nshould align (eg, joining a journal of customer updates with one of orders,\nwhere both are mapped on customer ID). This typically means the\npartitioning of the two event \"topics\" must be the same.\n\nAnother powerful pattern is to shard on partitions of a high-volume event\nstream, and also have each shard join against all events of a low-volume\nstream. For example, a shard might ingest and index \"viewed product\"\nevents, read a comparably low-volume \"purchase\" event stream, and on each\npurchase publish the bundle of its corresponding prior product views."
+    },
+    "consumerStatRequest": {
+      "type": "object",
+      "properties": {
+        "header": {
+          "$ref": "#/definitions/protocolHeader",
+          "description": "Header may be attached by a proxying consumer peer."
+        },
+        "shard": {
+          "type": "string",
+          "description": "Shard to Stat."
+        },
+        "readThrough": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "format": "int64"
+          },
+          "description": "Journals and offsets which must be reflected in a completed consumer\ntransaction before Stat returns, blocking if required. Offsets of journals\nnot read by this shard are ignored."
+        },
+        "extension": {
+          "type": "string",
+          "format": "byte",
+          "description": "Optional extension of the StatRequest."
+        }
+      }
+    },
+    "consumerStatResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/consumerStatus",
+          "description": "Status of the Stat RPC."
+        },
+        "header": {
+          "$ref": "#/definitions/protocolHeader",
+          "description": "Header of the response."
+        },
+        "readThrough": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "format": "int64"
+          },
+          "description": "Journals and offsets read through by the most recent completed consumer\ntransaction."
+        },
+        "publishAt": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "format": "int64"
+          },
+          "description": "Journals and offsets this shard has published through, including\nacknowledgements, as-of the most recent completed consumer transaction.\n\nFormally, if an acknowledged message A results in this shard publishing\nmessages B, and A falls within |read_through|, then all messages B \u0026 their\nacknowledgements fall within |publish_at|.\n\nThe composition of |read_through| and |publish_at| allow CQRS applications\nto provide read-your-writes consistency, even if written events pass\nthrough multiple intermediate consumers and arbitrary transformations\nbefore arriving at the materialized view which is ultimately queried."
+        },
+        "extension": {
+          "type": "string",
+          "format": "byte",
+          "description": "Optional extension of the StatResponse."
+        }
+      }
+    },
+    "consumerStatus": {
+      "type": "string",
+      "enum": [
+        "OK",
+        "SHARD_NOT_FOUND",
+        "NO_SHARD_PRIMARY",
+        "NOT_SHARD_PRIMARY",
+        "ETCD_TRANSACTION_FAILED",
+        "SHARD_STOPPED"
+      ],
+      "default": "OK",
+      "description": "Status is a response status code, used across Gazette Consumer RPC APIs.\n\n - SHARD_NOT_FOUND: The named shard does not exist.\n - NO_SHARD_PRIMARY: There is no current primary consumer process for the shard. This is a\ntemporary condition which should quickly resolve, assuming sufficient\nconsumer capacity.\n - NOT_SHARD_PRIMARY: The present consumer process is not the assigned primary for the shard,\nand was not instructed to proxy the request.\n - ETCD_TRANSACTION_FAILED: The Etcd transaction failed. Returned by Update RPC when an\nexpect_mod_revision of the UpdateRequest differs from the current\nModRevision of the ShardSpec within the store.\n - SHARD_STOPPED: The current primary shard has stopped, either due to reassignment or\nprocessing failure, and will not make further progress toward the\nrequested operation.\nFor example, a Stat RPC will return SHARD_STOPPED if the StatRequest\ncannot be satisfied."
+    },
+    "consumerUnassignResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/consumerStatus",
+          "description": "Status of the Unassign RPC."
+        },
+        "shards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shards which had assignments removed."
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "typeUrl": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "protocolHeader": {
+      "type": "object",
+      "properties": {
+        "processId": {
+          "$ref": "#/definitions/ProcessSpecID",
+          "description": "ID of the process responsible for request processing. May be empty iff\nHeader is being used within a proxied request, and that request may be\ndispatched to any member of the Route."
+        },
+        "route": {
+          "$ref": "#/definitions/protocolRoute",
+          "description": "Route of processes specifically responsible for this RPC, or an empty Route\nif any process is capable of serving the RPC."
+        },
+        "etcd": {
+          "$ref": "#/definitions/HeaderEtcd"
+        }
+      },
+      "description": "Header captures metadata such as the process responsible for processing\nan RPC, and its effective Etcd state."
+    },
+    "protocolLabel": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "description": "Label defines a key \u0026 value pair which can be attached to entities like\nJournalSpecs and BrokerSpecs. Labels may be used to provide identifying\nattributes which do not directly imply semantics to the core system, but\nare meaningful to users or for higher-level Gazette tools."
+    },
+    "protocolLabelSelector": {
+      "type": "object",
+      "properties": {
+        "include": {
+          "$ref": "#/definitions/protocolLabelSet",
+          "description": "Include is Labels which must be matched for a LabelSet to be selected. If\nempty, all Labels are included. An include Label with empty (\"\") value is\nmatched by a Label of the same name having any value."
+        },
+        "exclude": {
+          "$ref": "#/definitions/protocolLabelSet",
+          "description": "Exclude is Labels which cannot be matched for a LabelSet to be selected. If\nempty, no Labels are excluded. An exclude Label with empty (\"\") value\nexcludes a Label of the same name having any value."
+        }
+      },
+      "description": "LabelSelector defines a filter over LabelSets."
+    },
+    "protocolLabelSet": {
+      "type": "object",
+      "properties": {
+        "labels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protocolLabel"
+          },
+          "description": "Labels of the set. Instances must be unique and sorted over (Name, Value)."
+        }
+      },
+      "description": "LabelSet is a collection of labels and their values."
+    },
+    "protocolRoute": {
+      "type": "object",
+      "properties": {
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProcessSpecID"
+          },
+          "description": "Members of the Route, ordered on ascending ProcessSpec.ID (zone, suffix)."
+        },
+        "primary": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Index of the ProcessSpec serving as primary within |members|,\nor -1 of no member is currently primary."
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Endpoints of each Route member. If not empty, |endpoints| has the same\nlength and order as |members|, and captures the endpoint of each one."
+        }
+      },
+      "description": "Route captures the current topology of an item and the processes serving it."
+    },
+    "recoverylogFSMHints": {
+      "type": "object",
+      "properties": {
+        "log": {
+          "type": "string",
+          "description": "Log is the implied recovery log of any contained |live_nodes| Segments\nwhich omit a |log| value. This implied behavior is both for backward-\ncompatibility (Segments didn't always have a |log| field) and also for\ncompacting the representation in the common case of Segments mostly or\nentirely addressing a single log."
+        },
+        "liveNodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/recoverylogFnodeSegments"
+          },
+          "description": "Live Fnodes and their Segments as-of the generation of these FSMHints."
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/recoverylogProperty"
+          },
+          "description": "Property files and contents as-of the generation of these FSMHints."
+        }
+      },
+      "description": "FSMHints represents a manifest of Fnodes which were still live (eg, having\nremaining links) at the time the FSMHints were produced, as well as any\nProperties. It allows a Player of the log to identify minimal Segments which\nmust be read to recover all Fnodes, and also contains sufficient metadata for\na Player to resolve all possible conflicts it could encounter while reading\nthe log, to arrive at a consistent view of file state which exactly matches\nthat of the Recorder producing the FSMHints.\nNext tag: 4."
+    },
+    "recoverylogFnodeSegments": {
+      "type": "object",
+      "properties": {
+        "fnode": {
+          "type": "string",
+          "format": "int64",
+          "description": "Fnode being hinted."
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/recoverylogSegment"
+          },
+          "description": "Segments of the Fnode in the log. Currently, FSM tracks only a single\nSegment per Fnode per Author \u0026 Log. A specific implication of this is that Fnodes\nmodified over long periods of time will result in Segments spanning large\nchunks of the log. For best performance, Fnodes should be opened \u0026 written\nonce, and then never be modified again (this is RocksDB's behavior).\nIf supporting this case is desired, FSM will have to be a bit smarter about\nnot extending Segments which gap over significant portions of the log\n(eg, there's a trade-off to make over size of the hinted manifest, vs\nsavings incurred on playback by being able to skip portions of the log)."
+        }
+      },
+      "description": "FnodeSegments captures log Segments containing all RecordedOps of the Fnode."
+    },
+    "recoverylogProperty": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Filesystem path of this property, relative to the common base directory."
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete file content of this property."
+        }
+      },
+      "description": "Property is a small file which rarely changes, and is thus managed\noutside of regular Fnode tracking. See FSM.Properties."
+    },
+    "recoverylogSegment": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Author which wrote RecordedOps of this Segment."
+        },
+        "firstSeqNo": {
+          "type": "string",
+          "format": "int64",
+          "description": "First (lowest) sequence number of RecordedOps within this Segment."
+        },
+        "firstOffset": {
+          "type": "string",
+          "format": "int64",
+          "description": "First byte offset of the Segment, where |first_seq_no| is recorded.\nIf this Segment was produced by a Recorder, this is guaranteed only to be a\nlower-bound (eg, a Player reading at this offset may encounter irrelevant\noperations prior to the RecordedOp indicated by the tuple\n(|author|, |first_seq_no|, |first_checksum|). If a Player produced the Segment,\nfirst_offset is exact."
+        },
+        "firstChecksum": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Checksum of the RecordedOp having |first_seq_no|."
+        },
+        "lastSeqNo": {
+          "type": "string",
+          "format": "int64",
+          "description": "Last (highest, inclusive) sequence number of RecordedOps within this Segment."
+        },
+        "lastOffset": {
+          "type": "string",
+          "format": "int64",
+          "description": "Last offset (exclusive) of the Segment. Zero means the offset is not known\n(eg, because the Segment was produced by a Recorder)."
+        },
+        "log": {
+          "type": "string",
+          "description": "Log is the Journal holding this Segment's data, and to which offsets are relative."
+        }
+      },
+      "description": "Segment is a contiguous chunk of recovery log written by a single Author.\nRecorders track Segments they have written, for use in providing hints to\nfuture readers of the log. A key point to understand is that Gazette append\nsemantics mean that Recorders *cannot know* exactly what offsets their writes\nare applied to in the log, nor guarantee that their operations are not being\ninterleaved with those of other writers. Log Players are aware of these\nlimitations, and use Segments to resolve conflicts of possible interpretation\nof the log. Segments produced by a Player are exact, since Players observe all\nrecorded operations at their exact offsets.\nNext tag: 8."
+    },
+    "runtimeError": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}
