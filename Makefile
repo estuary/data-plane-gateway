@@ -10,7 +10,10 @@ gen_js_client:
 	deno bundle client/ts/src/index.ts client/js/client.js
 
 clean:
-	rm -rf gen/* client/js/*
+	rm -rf gen/* client/js/* test/tmp/*
+
+test:
+	./test.sh
 
 protoc-gen-gogo:
 	go mod download github.com/golang/protobuf
