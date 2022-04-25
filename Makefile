@@ -20,9 +20,23 @@ test:
 update_snapshots:
 	deno test client/test/ --allow-net --allow-read --allow-write --unstable -- --update
 
-protobuf_tools:
-	go install \
-		github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway \
-		github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger \
-		github.com/golang/protobuf/protoc-gen-go \
-		github.com/gogo/protobuf/protoc-gen-gogo
+
+PROTOBUF_TOOLS = \
+	protoc-gen-grpc-gateway \
+	protoc-gen-swagger \
+	protoc-gen-go \
+	protoc-gen-gogo
+
+protobuf_tools: $(PROTOBUF_TOOLS)
+
+protoc-gen-grpc-gateway:
+	GO111MODULEOFF=true go install github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway@v1.16.0
+
+protoc-gen-swagger:
+	GO111MODULEOFF=true go install github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger@v1.16.0
+
+protoc-gen-go:
+	GO111MODULEOFF=true go install github.com/golang/protobuf/protoc-gen-go@v1.5.2
+
+protoc-gen-gogo:
+	GO111MODULEOFF=true go install github.com/gogo/protobuf/protoc-gen-gogo@v1.3.2
