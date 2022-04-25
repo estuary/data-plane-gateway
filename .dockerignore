@@ -1,0 +1,4 @@
+docs/
+client/
+test/
+*.sh
