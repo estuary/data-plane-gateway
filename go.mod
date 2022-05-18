@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/gogo/gateway v1.1.0
+	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/soheilhy/cmux v0.1.5
