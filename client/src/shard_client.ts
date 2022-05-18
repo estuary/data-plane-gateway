@@ -1,47 +1,61 @@
 import * as consumer from "./gen/consumer/protocol/consumer.ts";
 import { Result } from "./result.ts";
 import { ShardSelector } from "./selector.ts";
-import { trimUrl } from "./util.ts";
+import { doFetch, ResponseError } from "./util.ts";
+
+interface Shard {
+  spec: consumer.ConsumerShardSpec,
+  status: Array<consumer.ConsumerReplicaStatus>,
+}
 
 export class ShardClient {
+  private authToken: string;
   private baseUrl: URL;
-  private client: consumer.Api<null>;
 
-  constructor(baseUrl: URL) {
+  constructor(baseUrl: URL, authToken: string) {
+    this.authToken = authToken;
     this.baseUrl = baseUrl;
-    this.client = new consumer.Api({
-      baseUrl: trimUrl(baseUrl),
-    });
   }
+
 
   async list(
     include: ShardSelector = new ShardSelector(),
     exclude: ShardSelector = new ShardSelector(),
-  ): Promise<Result<Array<consumer.ConsumerShardSpec>, Response>> {
-    const response = await this.client.v1.shardList({
+  ): Promise<Result<Array<Shard>, ResponseError>> {
+    const url = `${this.baseUrl.toString()}v1/shards/list`;
+    const body = {
       selector: {
         include: include.toLabelSet(),
         exclude: exclude.toLabelSet(),
       },
-    });
+    };
 
-    if (response.ok) {
-      return Result.Ok(response.data.shards!.map((j) => j.spec!));
+    const result = await doFetch(url, this.authToken, body);
+
+    if (result.ok()) {
+      const data: consumer.ConsumerListResponse = await result.unwrap().json();
+      return Result.Ok(data.shards!.map((s) => {
+        return { spec: s.spec!, status: s.status! }
+      }));
     } else {
-      return Result.Err(response);
+      return Result.Err(await ResponseError.fromResponse(result.unwrap_err()));
     }
   }
 
   async stat(
     shard: string,
     readThrough: Record<string, string>,
-  ): Promise<Result<consumer.ConsumerStatResponse, Response>> {
-    const response = await this.client.v1.shardStat({ shard, readThrough });
+  ): Promise<Result<consumer.ConsumerStatResponse, ResponseError>> {
+    const url = `${this.baseUrl.toString()}v1/shards/stat`;
+    const body = { shard, readThrough };
 
-    if (response.ok) {
-      return Result.Ok(response.data);
+    const result = await doFetch(url, this.authToken, body);
+
+    if (result.ok()) {
+      const data: consumer.ConsumerStatResponse = await result.unwrap().json();
+      return Result.Ok(data);
     } else {
-      return Result.Err(response);
+      return Result.Err(await ResponseError.fromResponse(result.unwrap_err()));
     }
   }
 }
