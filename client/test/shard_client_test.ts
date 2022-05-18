@@ -1,27 +1,15 @@
-import { assertEquals } from "https://deno.land/std@0.135.0/testing/asserts.ts";
+import { assertEquals, assertMatch } from "https://deno.land/std@0.135.0/testing/asserts.ts";
 // TODO: Built-in snapshot testing has landed in deno std, but is not yet released.
 import { test as snapshotTest } from "https://deno.land/x/snap/mod.ts";
 
 import * as consumer from "../src/gen/consumer/protocol/consumer.ts";
-import { BASE_URL } from "./test_support.ts";
+import { BASE_URL, makeJwt } from "./test_support.ts";
 import { ShardClient } from "../src/shard_client.ts";
 import { ShardSelector } from "../src/selector.ts";
 
-Deno.test("ShardClient.list happy path test", async () => {
-  const client = new ShardClient(BASE_URL);
-  const emptySelector = new ShardSelector();
-
-  const shards = (await client.list(emptySelector)).unwrap();
-
-  assertEquals(1, shards.length);
-  assertEquals(
-    "capture/acmeCo/source-hello-world/00000000-00000000",
-    shards[0].id,
-  );
-});
 
 Deno.test("ShardClient.list task selector test", async () => {
-  const client = new ShardClient(BASE_URL);
+  const client = new ShardClient(BASE_URL, await makeJwt({}));
   const taskSelector = new ShardSelector().task("acmeCo/source-hello-world");
 
   const shards = (await client.list(taskSelector)).unwrap();
@@ -33,11 +21,22 @@ Deno.test("ShardClient.list task selector test", async () => {
   );
 });
 
-Deno.test("ShardClient.list id selector test", async () => {
-  const client = new ShardClient(BASE_URL);
+Deno.test("ShardClient.list bare id selector test", async () => {
+  const client = new ShardClient(BASE_URL, await makeJwt({}));
   const idSelector = new ShardSelector().id(
     "capture/acmeCo/source-hello-world/00000000-00000000",
   );
+
+  const error = (await client.list(idSelector)).unwrap_err();
+
+  assertMatch(error.body.message!, new RegExp("No authorizing labels provided"));
+});
+
+Deno.test("ShardClient.list compound id selector test", async () => {
+  const client = new ShardClient(BASE_URL, await makeJwt({}));
+  const idSelector = new ShardSelector()
+    .id("capture/acmeCo/source-hello-world/00000000-00000000")
+    .task("acmeCo/source-hello-world");
 
   const shards = (await client.list(idSelector)).unwrap();
 
@@ -49,7 +48,7 @@ Deno.test("ShardClient.list id selector test", async () => {
 });
 
 snapshotTest("ShardClient.stat test", async ({ assertSnapshot }) => {
-  const client = new ShardClient(BASE_URL);
+  const client = new ShardClient(BASE_URL, await makeJwt({prefixes: ["capture/acmeCo/"]}));
 
   const stats = (await client.stat(
     "capture/acmeCo/source-hello-world/00000000-00000000",

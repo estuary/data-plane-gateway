@@ -8,7 +8,8 @@ export class Selector {
   }
 
   toLabelSet(): broker.ProtocolLabelSet {
-    return { labels: this.labels };
+    const sorted = this.labels.slice(0).sort((a,b) => a.name! > b.name! ? 1 : -1);
+    return { labels: sorted };
   }
 }
 

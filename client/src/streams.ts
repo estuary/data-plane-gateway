@@ -69,7 +69,7 @@ export async function readStreamToEnd<T>(
 
   await reader.read().then(
     async function pump(
-      { done, value }: { done: boolean, value?: T }
+      { done, value }: { done: boolean; value?: T },
     ): Promise<void> {
       if (!done && value) {
         results.push(value);
