@@ -16,10 +16,11 @@ import (
 )
 
 var (
-	brokerAddr   = flag.String("broker-address", "localhost:8080", "Target broker address")
-	consumerAddr = flag.String("consumer-address", "localhost:9000", "Target consumer address")
-	corsOrigin   = flag.String("cors-origin", "*", "CORS Origin")
-	gatewayAddr  = flag.String("gateway-address", "localhost:8081", "Gateway address")
+	brokerAddr         = flag.String("broker-address", "localhost:8080", "Target broker address")
+	consumerAddr       = flag.String("consumer-address", "localhost:9000", "Target consumer address")
+	corsOrigin         = flag.String("cors-origin", "*", "CORS Origin")
+	gatewayAddr        = flag.String("gateway-address", "localhost:28318", "Gateway address")
+	jwtVerificationKey = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
 )
 
 func main() {

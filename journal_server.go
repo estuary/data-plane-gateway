@@ -40,17 +40,47 @@ func newJournalClient(ctx context.Context, addr string) (pb.JournalClient, error
 
 // List implements protocol.JournalServer
 func (s *JournalAuthServer) List(ctx context.Context, req *pb.ListRequest) (*pb.ListResponse, error) {
+	claims, err := authorized(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Unauthorized: %w", err)
+	}
+
+	err = enforceSelectorPrefix(claims, req.Selector)
+	if err != nil {
+		return nil, fmt.Errorf("Unauthorized: %w", err)
+	}
+
 	return s.journalClient.List(ctx, req)
 }
 
 // ListFragments implements protocol.JournalServer
 func (s *JournalAuthServer) ListFragments(ctx context.Context, req *pb.FragmentsRequest) (*pb.FragmentsResponse, error) {
+	claims, err := authorized(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Unauthorized: %w", err)
+	}
+
+	err = enforcePrefix(claims, req.Journal.String())
+	if err != nil {
+		return nil, fmt.Errorf("Unauthorized: %w", err)
+	}
+
 	return s.journalClient.ListFragments(ctx, req)
 }
 
 // Read implements protocol.JournalServer
 func (s *JournalAuthServer) Read(readReq *pb.ReadRequest, readServer pb.Journal_ReadServer) error {
 	ctx := readServer.Context()
+
+	claims, err := authorized(ctx)
+	if err != nil {
+		return fmt.Errorf("Unauthorized: %w", err)
+	}
+
+	err = enforcePrefix(claims, readReq.Journal.String())
+	if err != nil {
+		return fmt.Errorf("Unauthorized: %w", err)
+	}
 
 	readClient, err := s.journalClient.Read(ctx, readReq)
 	if err != nil {
@@ -61,10 +91,14 @@ func (s *JournalAuthServer) Read(readReq *pb.ReadRequest, readServer pb.Journal_
 }
 
 // We're currently only implementing the read-only RPCs for protocol.JournalServer.
-func (s *JournalAuthServer) Append(pb.Journal_AppendServer) error { panic("unimplemented") }
-func (s *JournalAuthServer) Apply(context.Context, *pb.ApplyRequest) (*pb.ApplyResponse, error) {
-	panic("unimplemented")
+func (s *JournalAuthServer) Append(pb.Journal_AppendServer) error {
+	return fmt.Errorf("Unsupported operation: `Append`")
 }
-func (s *JournalAuthServer) Replicate(pb.Journal_ReplicateServer) error { panic("unimplemented") }
+func (s *JournalAuthServer) Apply(context.Context, *pb.ApplyRequest) (*pb.ApplyResponse, error) {
+	return nil, fmt.Errorf("Unsupported operation: `Apply`")
+}
+func (s *JournalAuthServer) Replicate(pb.Journal_ReplicateServer) error {
+	return fmt.Errorf("Unsupported operation: `Replicate`")
+}
 
 var _ pb.JournalServer = &JournalAuthServer{}
