@@ -34,7 +34,7 @@ export class Result {
             return this.value;
         }
         else {
-            throw "Attempted to unwrap an Result error";
+            throw `Attempted to unwrap an Result, but found error: ${JSON.stringify(this.error)}`;
         }
     }
     unwrap_err() {
@@ -42,7 +42,7 @@ export class Result {
             return this.error;
         }
         else {
-            throw "Attempted to unwrap an Result error";
+            throw `Attempted to unwrap an Result error, but found value: ${JSON.stringify(this.value)}`;
         }
     }
     map(f) {
@@ -50,7 +50,7 @@ export class Result {
             return new Result(f(this.value), undefined);
         }
         else {
-            return this;
+            return new Result(undefined, this.error);
         }
     }
     map_err(f) {
@@ -58,7 +58,7 @@ export class Result {
             return new Result(undefined, f(this.error));
         }
         else {
-            return this;
+            return new Result(this.value, undefined);
         }
     }
 }

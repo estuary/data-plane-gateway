@@ -8,6 +8,6 @@ export declare class Result<T, E> {
     err(): boolean;
     unwrap(): T;
     unwrap_err(): E;
-    map<U>(f: (v: T) => U): Result<T | U, E>;
-    map_err<F>(f: (e: E) => F): Result<T, E | F>;
+    map<U>(f: (v: T) => U): Result<U, E>;
+    map_err<F>(f: (e: E) => F): Result<T, F>;
 }

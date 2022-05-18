@@ -1,3 +1,4 @@
+import { sortBy } from "./util.js";
 export class Selector {
     constructor() {
         Object.defineProperty(this, "labels", {
@@ -9,7 +10,8 @@ export class Selector {
         this.labels = [];
     }
     toLabelSet() {
-        return { labels: this.labels };
+        const sorted = this.labels.slice(0).sort(sortBy("name", "value"));
+        return { labels: sorted };
     }
 }
 export class JournalSelector extends Selector {

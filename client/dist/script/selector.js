@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ShardSelector = exports.JournalSelector = exports.Selector = void 0;
+const util_js_1 = require("./util.js");
 class Selector {
     constructor() {
         Object.defineProperty(this, "labels", {
@@ -12,7 +13,8 @@ class Selector {
         this.labels = [];
     }
     toLabelSet() {
-        return { labels: this.labels };
+        const sorted = this.labels.slice(0).sort((0, util_js_1.sortBy)("name", "value"));
+        return { labels: sorted };
     }
 }
 exports.Selector = Selector;
