@@ -68,4 +68,5 @@ npx swagger-typescript-api \
   -o client/src/gen/${SERVICE}/protocol/ \
   -n ${SERVICE}.ts \
   --responses \
-  --union-enums
+  --union-enums \
+  --no-client

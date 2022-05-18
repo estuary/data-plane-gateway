@@ -20,7 +20,7 @@ export async function doFetch(
       const response = await fetch(url, {
         method: "POST",
         headers: {
-          "Content-Type": broker.ContentType.Json,
+          "Content-Type": "application/json",
           "Authorization": `Bearer ${authToken}`,
         },
         body: JSON.stringify(body),
