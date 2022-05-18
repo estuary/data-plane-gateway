@@ -12,7 +12,8 @@ class Selector {
         this.labels = [];
     }
     toLabelSet() {
-        return { labels: this.labels };
+        const sorted = this.labels.slice(0).sort((a, b) => a.name > b.name ? 1 : -1);
+        return { labels: sorted };
     }
 }
 exports.Selector = Selector;

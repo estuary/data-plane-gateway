@@ -1,47 +1,50 @@
-import * as consumer from "./gen/consumer/protocol/consumer.js";
 import { Result } from "./result.js";
 import { ShardSelector } from "./selector.js";
-import { trimUrl } from "./util.js";
+import { doFetch, ResponseError } from "./util.js";
 export class ShardClient {
-    constructor(baseUrl) {
+    constructor(baseUrl, authToken) {
+        Object.defineProperty(this, "authToken", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
         Object.defineProperty(this, "baseUrl", {
             enumerable: true,
             configurable: true,
             writable: true,
             value: void 0
         });
-        Object.defineProperty(this, "client", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
+        this.authToken = authToken;
         this.baseUrl = baseUrl;
-        this.client = new consumer.Api({
-            baseUrl: trimUrl(baseUrl),
-        });
     }
     async list(include = new ShardSelector(), exclude = new ShardSelector()) {
-        const response = await this.client.v1.shardList({
+        const url = `${this.baseUrl.toString()}v1/shards/list`;
+        const body = {
             selector: {
                 include: include.toLabelSet(),
                 exclude: exclude.toLabelSet(),
             },
-        });
-        if (response.ok) {
-            return Result.Ok(response.data.shards.map((j) => j.spec));
+        };
+        const result = await doFetch(url, this.authToken, body);
+        if (result.ok()) {
+            const data = await result.unwrap().json();
+            return Result.Ok(data.shards.map((j) => j.spec));
         }
         else {
-            return Result.Err(response);
+            return Result.Err(await ResponseError.fromResponse(result.unwrap_err()));
         }
     }
     async stat(shard, readThrough) {
-        const response = await this.client.v1.shardStat({ shard, readThrough });
-        if (response.ok) {
-            return Result.Ok(response.data);
+        const url = `${this.baseUrl.toString()}v1/shards/stat`;
+        const body = { shard, readThrough };
+        const result = await doFetch(url, this.authToken, body);
+        if (result.ok()) {
+            const data = await result.unwrap().json();
+            return Result.Ok(data);
         }
         else {
-            return Result.Err(response);
+            return Result.Err(await ResponseError.fromResponse(result.unwrap_err()));
         }
     }
 }
