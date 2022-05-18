@@ -1,4 +1,5 @@
 import * as broker from "./gen/broker/protocol/broker.ts";
+import { sortBy } from "./util.ts";
 
 export class Selector {
   protected labels: Array<broker.ProtocolLabel>;
@@ -8,8 +9,10 @@ export class Selector {
   }
 
   toLabelSet(): broker.ProtocolLabelSet {
-    return { labels: this.labels };
+    const sorted = this.labels.slice(0).sort(sortBy("name", "value"));
+    return { labels: sorted };
   }
+
 }
 
 export class JournalSelector extends Selector {
