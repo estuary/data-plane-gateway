@@ -1,73 +1,55 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ShardClient = void 0;
-const consumer = __importStar(require("./gen/consumer/protocol/consumer.js"));
 const result_js_1 = require("./result.js");
 const selector_js_1 = require("./selector.js");
 const util_js_1 = require("./util.js");
 class ShardClient {
-    constructor(baseUrl) {
+    constructor(baseUrl, authToken) {
+        Object.defineProperty(this, "authToken", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
         Object.defineProperty(this, "baseUrl", {
             enumerable: true,
             configurable: true,
             writable: true,
             value: void 0
         });
-        Object.defineProperty(this, "client", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
+        this.authToken = authToken;
         this.baseUrl = baseUrl;
-        this.client = new consumer.Api({
-            baseUrl: (0, util_js_1.trimUrl)(baseUrl),
-        });
     }
     async list(include = new selector_js_1.ShardSelector(), exclude = new selector_js_1.ShardSelector()) {
-        const response = await this.client.v1.shardList({
+        const url = `${this.baseUrl.toString()}v1/shards/list`;
+        const body = {
             selector: {
                 include: include.toLabelSet(),
                 exclude: exclude.toLabelSet(),
             },
-        });
-        if (response.ok) {
-            return result_js_1.Result.Ok(response.data.shards.map((j) => j.spec));
+        };
+        const result = await (0, util_js_1.doFetch)(url, this.authToken, body);
+        if (result.ok()) {
+            const data = await result.unwrap().json();
+            return result_js_1.Result.Ok(data.shards.map((s) => {
+                return { spec: s.spec, status: s.status };
+            }));
         }
         else {
-            return result_js_1.Result.Err(response);
+            return result_js_1.Result.Err(await util_js_1.ResponseError.fromResponse(result.unwrap_err()));
         }
     }
     async stat(shard, readThrough) {
-        const response = await this.client.v1.shardStat({ shard, readThrough });
-        if (response.ok) {
-            return result_js_1.Result.Ok(response.data);
+        const url = `${this.baseUrl.toString()}v1/shards/stat`;
+        const body = { shard, readThrough };
+        const result = await (0, util_js_1.doFetch)(url, this.authToken, body);
+        if (result.ok()) {
+            const data = await result.unwrap().json();
+            return result_js_1.Result.Ok(data);
         }
         else {
-            return result_js_1.Result.Err(response);
+            return result_js_1.Result.Err(await util_js_1.ResponseError.fromResponse(result.unwrap_err()));
         }
     }
 }
