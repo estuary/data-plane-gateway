@@ -6,10 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"os/signal"
 	"regexp"
-	"syscall"
 	"time"
 
 	"github.com/gogo/gateway"
@@ -23,7 +20,7 @@ import (
 	cgw "github.com/estuary/data-plane-gateway/gen/consumer/protocol"
 )
 
-func NewRestServer() *GracefulServer {
+func NewRestServer() http.Handler {
 	var ctx context.Context = context.Background()
 	var err error
 
@@ -37,12 +34,12 @@ func NewRestServer() *GracefulServer {
 		runtime.WithProtoErrorHandler(runtime.DefaultHTTPProtoErrorHandler),
 	)
 
-	err = registerJournalService(ctx, mux, *brokerAddr)
+	err = registerJournalService(ctx, mux, *gatewayAddr)
 	if err != nil {
 		log.Fatalf("Failed to initialize rest gateway: %v", err)
 	}
 
-	err = registerShardService(ctx, mux, *consumerAddr)
+	err = registerShardService(ctx, mux, *gatewayAddr)
 	if err != nil {
 		log.Fatalf("Failed to initialize rest gateway: %v", err)
 	}
@@ -51,11 +48,7 @@ func NewRestServer() *GracefulServer {
 	n.Use(negroni.HandlerFunc(cors))
 	n.UseHandler(mux)
 
-	log.Printf("Listening: %s\n", *gatewayAddr)
-	log.Printf("Connecting to broker: %s\n", *brokerAddr)
-	log.Printf("Connecting to consumer: %s\n", *consumerAddr)
-
-	return NewGracefulServer(n)
+	return n
 }
 
 func cors(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
@@ -116,54 +109,4 @@ func listen(addr string) (net.Listener, error) {
 	} else {
 		return net.Listen("tcp", url.String())
 	}
-}
-
-type GracefulServer struct {
-	Server   *http.Server
-	shutdown chan bool
-}
-
-func NewGracefulServer(handler http.Handler) *GracefulServer {
-	return &GracefulServer{
-		Server:   &http.Server{Handler: handler},
-		shutdown: make(chan bool, 0),
-	}
-}
-
-func (s *GracefulServer) Serve(addr string) error {
-	listener, err := listen(addr)
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
-
-	err = s.Server.Serve(listener)
-	if err == http.ErrServerClosed {
-		// This is expected, not really an error.
-	} else if err != nil {
-		return err
-	}
-
-	// Wait for shutdown to complete
-	<-s.shutdown
-
-	return nil
-}
-
-func (s *GracefulServer) TrapShutdownSignal(timeout time.Duration) error {
-	var signaled = make(chan os.Signal, 1)
-	signal.Notify(signaled, syscall.SIGTERM, syscall.SIGINT)
-	<-signaled
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	err := s.Server.Shutdown(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Signal that we've finished shutting down
-	close(s.shutdown)
-
-	return nil
 }
