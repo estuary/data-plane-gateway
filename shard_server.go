@@ -40,25 +40,45 @@ func newShardClient(ctx context.Context, addr string) (pc.ShardClient, error) {
 
 // List implements protocol.ShardServer
 func (s *ShardAuthServer) List(ctx context.Context, req *pc.ListRequest) (*pc.ListResponse, error) {
+	claims, err := authorized(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = enforceSelectorPrefix(claims, req.Selector)
+	if err != nil {
+		return nil, fmt.Errorf("Unauthorized: %w", err)
+	}
+
 	return s.shardClient.List(ctx, req)
 
 }
 
 // Stat implements protocol.ShardServer
 func (s *ShardAuthServer) Stat(ctx context.Context, req *pc.StatRequest) (*pc.StatResponse, error) {
+	claims, err := authorized(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = enforcePrefix(claims, req.Shard.String())
+	if err != nil {
+		return nil, fmt.Errorf("Unauthorized: %w", err)
+	}
+
 	return s.shardClient.Stat(ctx, req)
 
 }
 
 // We're currently only implementing the read-only RPCs for protocol.ShardServer.
 func (s *ShardAuthServer) Apply(context.Context, *pc.ApplyRequest) (*pc.ApplyResponse, error) {
-	panic("unimplemented")
+	return nil, fmt.Errorf("Unsupported operation: `Apply`")
 }
 func (s *ShardAuthServer) GetHints(context.Context, *pc.GetHintsRequest) (*pc.GetHintsResponse, error) {
-	panic("unimplemented")
+	return nil, fmt.Errorf("Unsupported operation: `GetHints`")
 }
 func (s *ShardAuthServer) Unassign(context.Context, *pc.UnassignRequest) (*pc.UnassignResponse, error) {
-	panic("unimplemented")
+	return nil, fmt.Errorf("Unsupported operation: `Unassign`")
 }
 
 var _ pc.ShardServer = &ShardAuthServer{}
