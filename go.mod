@@ -7,6 +7,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
+	github.com/jamiealquiza/envy v1.1.0
 	github.com/soheilhy/cmux v0.1.5
 	github.com/urfave/negroni v1.0.0
 	go.gazette.dev/core v0.89.1-0.20220422155930-55af5cf8cd88
@@ -22,6 +23,7 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/klauspost/compress v1.13.5 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -31,6 +33,8 @@ require (
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
+	github.com/spf13/cobra v1.4.0 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	golang.org/x/text v0.3.7 // indirect
