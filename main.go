@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jamiealquiza/envy"
 	"github.com/soheilhy/cmux"
 	pb "go.gazette.dev/core/broker/protocol"
 	pc "go.gazette.dev/core/consumer/protocol"
@@ -25,6 +26,7 @@ var (
 
 func main() {
 	flag.Parse()
+	envy.Parse("GATEWAY")
 
 	journalServer := NewJournalAuthServer()
 	shardServer := NewShardAuthServer()
