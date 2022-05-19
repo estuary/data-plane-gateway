@@ -10,7 +10,7 @@ COPY go.* ./
 RUN go mod download
 
 # Build the gateway.
-COPY main.go ./
+COPY *.go ./
 COPY gen ./gen
 RUN go build .
 
