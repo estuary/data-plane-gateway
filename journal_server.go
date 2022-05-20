@@ -13,9 +13,7 @@ type JournalAuthServer struct {
 	journalClient pb.JournalClient
 }
 
-func NewJournalAuthServer() *JournalAuthServer {
-	ctx := context.Background()
-
+func NewJournalAuthServer(ctx context.Context) *JournalAuthServer {
 	journalClient, err := newJournalClient(ctx, *brokerAddr)
 	if err != nil {
 		log.Fatalf("Failed to connect to broker: %v", err)
@@ -50,6 +48,7 @@ func (s *JournalAuthServer) List(ctx context.Context, req *pb.ListRequest) (*pb.
 		return nil, fmt.Errorf("Unauthorized: %w", err)
 	}
 
+	ctx = pb.WithDispatchDefault(ctx)
 	return s.journalClient.List(ctx, req)
 }
 
