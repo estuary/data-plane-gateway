@@ -13,9 +13,7 @@ type ShardAuthServer struct {
 	shardClient pc.ShardClient
 }
 
-func NewShardAuthServer() *ShardAuthServer {
-	ctx := context.Background()
-
+func NewShardAuthServer(ctx context.Context) *ShardAuthServer {
 	shardClient, err := newShardClient(ctx, *consumerAddr)
 	if err != nil {
 		log.Fatalf("Failed to connect to consumer: %v", err)

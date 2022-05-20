@@ -3,11 +3,8 @@ package main
 import (
 	"context"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
 	"regexp"
-	"time"
 
 	"github.com/gogo/gateway"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
@@ -20,8 +17,7 @@ import (
 	cgw "github.com/estuary/data-plane-gateway/gen/consumer/protocol"
 )
 
-func NewRestServer() http.Handler {
-	var ctx context.Context = context.Background()
+func NewRestServer(ctx context.Context, gatewayAddr string) http.Handler {
 	var err error
 
 	jsonpb := &gateway.JSONPb{
@@ -34,14 +30,16 @@ func NewRestServer() http.Handler {
 		runtime.WithProtoErrorHandler(runtime.DefaultHTTPProtoErrorHandler),
 	)
 
-	err = registerJournalService(ctx, mux, *gatewayAddr)
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+
+	err = bgw.RegisterJournalHandlerFromEndpoint(ctx, mux, gatewayAddr, opts)
 	if err != nil {
-		log.Fatalf("Failed to initialize rest gateway: %v", err)
+		log.Fatalf("Failed to initialize journal rest gateway: %v", err)
 	}
 
-	err = registerShardService(ctx, mux, *gatewayAddr)
+	err = cgw.RegisterShardHandlerFromEndpoint(ctx, mux, gatewayAddr, opts)
 	if err != nil {
-		log.Fatalf("Failed to initialize rest gateway: %v", err)
+		log.Fatalf("Failed to initialize shard rest gateway: %v", err)
 	}
 
 	n := negroni.Classic()
@@ -71,42 +69,4 @@ func allowedOrigin(origin string) bool {
 	}
 	matched, _ := regexp.MatchString(*corsOrigin, origin)
 	return matched
-}
-
-func registerJournalService(ctx context.Context, mux *runtime.ServeMux, addr string) error {
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	if url, err := url.Parse(addr); err != nil {
-		return err
-	} else if url.Scheme == "unix" {
-		opts = append(opts, grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-			return net.DialTimeout("unix", addr, timeout)
-		}))
-		return bgw.RegisterJournalHandlerFromEndpoint(ctx, mux, url.Path, opts)
-	} else {
-		return bgw.RegisterJournalHandlerFromEndpoint(ctx, mux, url.String(), opts)
-	}
-}
-
-func registerShardService(ctx context.Context, mux *runtime.ServeMux, addr string) error {
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	if url, err := url.Parse(addr); err != nil {
-		return err
-	} else if url.Scheme == "unix" {
-		opts = append(opts, grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-			return net.DialTimeout("unix", addr, timeout)
-		}))
-		return cgw.RegisterShardHandlerFromEndpoint(ctx, mux, url.Path, opts)
-	} else {
-		return cgw.RegisterShardHandlerFromEndpoint(ctx, mux, url.String(), opts)
-	}
-}
-
-func listen(addr string) (net.Listener, error) {
-	if url, err := url.Parse(addr); err != nil {
-		return nil, err
-	} else if url.Scheme == "unix" {
-		return net.Listen("unix", url.Path)
-	} else {
-		return net.Listen("tcp", url.String())
-	}
 }

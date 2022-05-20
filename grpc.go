@@ -2,9 +2,12 @@ package main
 
 import (
 	context "context"
+	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/url"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -18,22 +21,26 @@ func dialAddress(ctx context.Context, addr string) (*grpc.ClientConn, error) {
 	defer cancel()
 
 	var dialAddr string
-	opts := []grpc.DialOption{grpc.WithInsecure()}
-	if url, err := url.Parse(addr); err != nil {
-		return nil, err
-	} else if url.Scheme == "unix" {
-		dialAddr = url.Path
+	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
+	if strings.HasPrefix(addr, "unix://") {
+		parsedUrl, err := url.Parse(addr)
+		if err != nil {
+			return nil, err
+		}
+		dialAddr = parsedUrl.Path
 		opts = append(opts, grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout("unix", addr, timeout)
 		}))
 	} else {
-		dialAddr = url.String()
+		dialAddr = addr
 	}
 
 	conn, err := grpc.DialContext(dialCtx, dialAddr, opts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to dial `%v`: %w", dialAddr, err)
 	}
+	log.Printf("[dialAddress] dial successful. addr = %s", addr)
+
 	go func() {
 		<-ctx.Done()
 		if cerr := conn.Close(); cerr != nil {

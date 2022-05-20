@@ -57,7 +57,6 @@ export TESTDIR=$(realpath ${TESTDIR})
 export BROKER_ADDRESS=unix://localhost${TESTDIR}/gazette.sock
 export CONSUMER_ADDRESS=unix://localhost${TESTDIR}/consumer.sock
 export GATEWAY_PORT=28318
-export GATEWAY_ADDRESS=localhost:${GATEWAY_PORT}
 
 export BUILD_ID=test-build-id
 export CATALOG_SOURCE="test/acmeCo/source-hello-world.flow.yaml"
@@ -82,7 +81,7 @@ log "Data plane launched: ${DATA_PLANE_PID}"
 
 # Start the gateway and point it at the data plane
 ${GATEWAY_BIN} \
-  --gateway-address=${GATEWAY_ADDRESS} \
+  --port=${GATEWAY_PORT} \
   --broker-address=${BROKER_ADDRESS} \
   --consumer-address=${CONSUMER_ADDRESS} \
   &
