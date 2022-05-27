@@ -22,9 +22,12 @@ var (
 	zone               = flag.String("zone", "local", "Availability zone within which this process is running")
 )
 
+var corsConfig *corsSettings
+
 func main() {
 	flag.Parse()
 	envy.Parse("GATEWAY")
+	corsConfig = NewCorsSettings(*corsOrigin)
 
 	pb.RegisterGRPCDispatcher(*zone)
 

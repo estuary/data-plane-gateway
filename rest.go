@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/gogo/gateway"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
@@ -50,7 +51,7 @@ func NewRestServer(ctx context.Context, gatewayAddr string) http.Handler {
 }
 
 func cors(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	if allowedOrigin(r.Header.Get("Origin")) {
+	if corsConfig.IsAllowed(r.Header.Get("Origin")) {
 		rw.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 		rw.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		rw.Header().Set("Access-Control-Allow-Headers", "Cache-Control, Content-Language, Content-Length, Content-Type, Expires, Last-Modified, Pragma, Authorization")
@@ -63,10 +64,30 @@ func cors(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	next(rw, r)
 }
 
-func allowedOrigin(origin string) bool {
-	if *corsOrigin == "*" {
+type corsSettings struct {
+	allowedOrigins []string
+}
+
+func NewCorsSettings(rawOriginFlag string) *corsSettings {
+	return &corsSettings{
+		allowedOrigins: strings.Split(rawOriginFlag, ","),
+	}
+}
+
+func (c *corsSettings) IsAllowed(origin string) bool {
+	if c.allowWildcard() {
 		return true
 	}
-	matched, _ := regexp.MatchString(*corsOrigin, origin)
-	return matched
+
+	for _, allowed := range c.allowedOrigins {
+		if matched, _ := regexp.MatchString(allowed, origin); matched {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c *corsSettings) allowWildcard() bool {
+	return len(c.allowedOrigins) == 1 && c.allowedOrigins[0] == "*"
 }
