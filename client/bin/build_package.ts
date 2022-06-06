@@ -1,10 +1,13 @@
-import { build, emptyDir } from "https://deno.land/x/dnt/mod.ts";
+import { build, emptyDir } from "https://deno.land/x/dnt@0.25.1/mod.ts";
 
 await emptyDir("./dist");
 
 await build({
   entryPoints: ["client/src/index.ts"],
   outDir: "client/dist",
+  compilerOptions: {
+    lib: ["es2021", "dom"],
+  },
   shims: {},
   rootTestDir: "client/test",
   test: false,
