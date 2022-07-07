@@ -4,6 +4,7 @@ import (
 	context "context"
 	"flag"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/jamiealquiza/envy"
@@ -44,6 +45,10 @@ func main() {
 
 	pb.RegisterJournalServer(srv.GRPCServer, journalServer)
 	pc.RegisterShardServer(srv.GRPCServer, shardServer)
+
+	srv.HTTPMux.Handle("/healthz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("OK\n"))
+	}))
 	srv.HTTPMux.Handle("/", restServer)
 
 	srv.QueueTasks(tasks)
