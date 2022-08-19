@@ -34,7 +34,7 @@ fi
 # flowctl, while CI can download the flowctl binary to a known location.
 FLOW_BIN="${3}"
 if [ -z "${FLOW_BIN}" ]; then
-  FLOW_BIN=$(which flowctl)
+  FLOW_BIN=$(which flowctl-admin)
 fi
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
