@@ -58,7 +58,7 @@ jobs:
           && [[ -z "$(git status --porcelain)" ]] || exit 1
 
       - name: Run Tests
-        run: ./test.sh run $HOME/bin/data-plane-gateway $HOME/bin/flowctl
+        run: ./test.sh run $HOME/bin/data-plane-gateway $HOME/bin/flowctl-admin
 
       - name: Build Docker Image
         uses: docker/build-push-action@v2
