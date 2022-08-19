@@ -19,7 +19,7 @@ var (
 	consumerAddr       = flag.String("consumer-address", "localhost:9000", "Target consumer address")
 	corsOrigin         = flag.String("cors-origin", "*", "CORS Origin")
 	jwtVerificationKey = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
-	port               = flag.String("port", "", "Service port for HTTP and gRPC requests. A random port is used if not set. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
+	port               = flag.String("port", "28318", "Service port for HTTP and gRPC requests. A random port is used if not set. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
 	zone               = flag.String("zone", "local", "Availability zone within which this process is running")
 )
 
