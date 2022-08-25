@@ -26,7 +26,7 @@ log "MODE: $MODE"
 # the gateway, while CI can build a fresh copy immediately before running tests.
 GATEWAY_BIN="${2}"
 if [ -z "${GATEWAY_BIN}" ]; then
-  GATEWAY_BIN=$(which data-plane-gateway)
+    GATEWAY_BIN="$(command -v data-plane-gateway)"
 fi
 
 # The third arg sets the FLOW_BIN. This is the full path to the flow binary to
@@ -34,7 +34,7 @@ fi
 # flowctl, while CI can download the flowctl binary to a known location.
 FLOW_BIN="${3}"
 if [ -z "${FLOW_BIN}" ]; then
-  FLOW_BIN=$(which flowctl-admin)
+  FLOW_BIN="$(command -v flowctl-admin)"
 fi
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
@@ -83,9 +83,7 @@ log "Data plane launched: ${DATA_PLANE_PID}"
 ${GATEWAY_BIN} \
   --port=${GATEWAY_PORT} \
   --broker-address=${BROKER_ADDRESS} \
-  --consumer-address=${CONSUMER_ADDRESS} \
-  --tls-certificate=${ROOT_DIR}/test/tls/cert.pem \
-  --tls-private-key=${ROOT_DIR}/test/tls/key.pem \
+  --consumer-address=${CONSUMER_ADDRESS}
   &
 GATEWAY_PID=$!
 
