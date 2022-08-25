@@ -84,6 +84,8 @@ ${GATEWAY_BIN} \
   --port=${GATEWAY_PORT} \
   --broker-address=${BROKER_ADDRESS} \
   --consumer-address=${CONSUMER_ADDRESS} \
+  --tls-certificate=${ROOT_DIR}/test/tls/cert.pem \
+  --tls-private-key=${ROOT_DIR}/test/tls/key.pem \
   &
 GATEWAY_PID=$!
 
