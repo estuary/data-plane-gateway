@@ -10,7 +10,7 @@ require (
 	github.com/jamiealquiza/envy v1.1.0
 	github.com/soheilhy/cmux v0.1.5
 	github.com/urfave/negroni v1.0.0
-	go.gazette.dev/core v0.89.1-0.20220422155930-55af5cf8cd88
+	go.gazette.dev/core v0.89.1-0.20220825171317-54b34a7d85ec
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.45.0
 )
