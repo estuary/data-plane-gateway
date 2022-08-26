@@ -83,7 +83,7 @@ log "Data plane launched: ${DATA_PLANE_PID}"
 ${GATEWAY_BIN} \
   --port=${GATEWAY_PORT} \
   --broker-address=${BROKER_ADDRESS} \
-  --consumer-address=${CONSUMER_ADDRESS}
+  --consumer-address=${CONSUMER_ADDRESS} \
   &
 GATEWAY_PID=$!
 
@@ -116,7 +116,7 @@ log "Activation finished"
 
 if [ "${MODE}" == "run" ]; then
   # Wait just a bit longer for the shard to boot up.
-  sleep 5
+  sleep 10
 
   make test
 
