@@ -61,7 +61,13 @@ snapshotTest("ShardClient.stat test", async ({ assertSnapshot }) => {
   const pluck = (res: consumer.ConsumerStatResponse) => {
     return {
       status: res.status,
-      readThrough: res.readThrough,
+      // The connector may or may not have exited prior to this running, so the eof journal may not
+      // be present. We don't care about the state of the connector, since it really has no bearing
+      // on the test of the Shards api, so we add this line so the snapshot output is consistent.
+      readThrough: {
+        "acmeCo/source-hello-world/eof": "who cares",
+        ...res.readThrough
+      },
       publishAt: res.publishAt,
     };
   };

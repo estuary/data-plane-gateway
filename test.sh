@@ -116,7 +116,7 @@ log "Activation finished"
 
 if [ "${MODE}" == "run" ]; then
   # Wait just a bit longer for the shard to boot up.
-  sleep 10
+  sleep 5
 
   make test
 

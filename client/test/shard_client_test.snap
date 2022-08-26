@@ -2,7 +2,7 @@
   'ShardClient.stat test': {
     status: 'OK',
     readThrough: {
-      'acmeCo/source-hello-world/eof': '[MASKED string]',
+      'acmeCo/source-hello-world/eof': 'who cares',
       'acmeCo/source-hello-world/txn': '[MASKED string]',
     },
     publishAt: {
