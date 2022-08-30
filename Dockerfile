@@ -22,9 +22,15 @@ RUN openssl req -x509 -nodes -days 1095 \
     -newkey rsa:2048 -keyout tls-private-key.pem \
     -out tls-cert.pem
 
+# We'll copy the sh executable out of this, since distroless doesn't have a package manager with
+# which to install one
+FROM busybox:1.34-musl as busybox
+
 # Runtime Stage
 ################################################################################
 FROM gcr.io/distroless/base-debian10
+
+COPY --from=busybox /bin/sh /bin/sh
 
 WORKDIR /app
 ENV PATH="/app:$PATH"
