@@ -65,15 +65,14 @@ snapshotTest("ShardClient.stat test", async ({ assertSnapshot }) => {
       // be present. We don't care about the state of the connector, since it really has no bearing
       // on the test of the Shards api, so we add this line so the snapshot output is consistent.
       readThrough: {
-        "acmeCo/source-hello-world/eof": "who cares",
-        ...res.readThrough
+        ...res.readThrough,
+        "acmeCo/source-hello-world/eof": "who cares"
       },
       publishAt: res.publishAt,
     };
   };
 
   const masks = [
-    "/readThrough/acmeCo\/source-hello-world\/eof",
     "/readThrough/acmeCo\/source-hello-world\/txn",
     "/publishAt/acmeCo\/greetings\/pivot=00",
     "/publishAt/ops\/acmeCo\/stats\/kind=capture\/name=acmeCo%2Fsource-hello-world\/pivot=00",
