@@ -37,8 +37,8 @@ ENV PATH="/app:$PATH"
 
 # Bring in the compiled artifact from the builder.
 COPY --from=builder /builder/data-plane-gateway ./
-COPY --from=builder /builder/tls-private-key.pem ./
-COPY --from=builder /builder/tls-cert.pem ./
+COPY --from=builder --chown=nonroot /builder/tls-private-key.pem ./
+COPY --from=builder --chown=nonroot /builder/tls-cert.pem ./
 
 # Avoid running the data-plane-gateway as root.
 USER nonroot:nonroot
