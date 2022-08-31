@@ -1,6 +1,6 @@
 import * as jose from "https://deno.land/x/jose@v4.8.1/index.ts";
 
-export const BASE_URL = new URL("http://localhost:28318");
+export const BASE_URL = new URL("https://localhost:28318");
 
 const SIGNING_KEY = new TextEncoder().encode("supersecret");
 
