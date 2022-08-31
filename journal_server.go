@@ -28,6 +28,7 @@ func NewJournalAuthServer(ctx context.Context) *JournalAuthServer {
 }
 
 func newJournalClient(ctx context.Context, addr string) (pb.JournalClient, error) {
+	log.Printf("connecting journal client to: %s", addr)
 	conn, err := dialAddress(ctx, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to server: %w", err)

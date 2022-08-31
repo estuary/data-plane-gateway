@@ -14,7 +14,7 @@ clean:
 
 .PHONY: test
 test:
-	deno test client/test/ --allow-net --allow-read --allow-write --unstable
+	deno test client/test/ --allow-net --allow-read --allow-write --unstable --unsafely-ignore-certificate-errors
 
 .PHONY: update_snapshots
 update_snapshots:

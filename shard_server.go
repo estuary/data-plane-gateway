@@ -28,6 +28,7 @@ func NewShardAuthServer(ctx context.Context) *ShardAuthServer {
 }
 
 func newShardClient(ctx context.Context, addr string) (pc.ShardClient, error) {
+	log.Printf("connecting shard client to: %s", addr)
 	conn, err := dialAddress(ctx, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to server: %w", err)

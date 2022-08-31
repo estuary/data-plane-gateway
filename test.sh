@@ -11,6 +11,9 @@ function log() {
   echo "[test.sh] ${1}"
 }
 
+# Ensure we have openssl, which is needed in order to generate the tls certificate.
+command -v openssl || bail "This script requires the openssl binary, which was not found on the PATH"
+
 # The first arg sets the MODE. There are two MODES:
 # 1. "server" mode will launch flow, launch the gateway, and deploy a
 # source-hello-world capture. It stays running from that point on until the user
@@ -79,11 +82,19 @@ DATA_PLANE_PID=$!
 
 log "Data plane launched: ${DATA_PLANE_PID}"
 
+# Generate a private key and a self-signed TLS certificate to use for the test.
+openssl req -x509 -nodes -days 365 \
+    -subj  "/C=CA/ST=QC/O=Estuary/CN=localhost:${GATEWAY_PORT}" \
+    -newkey rsa:2048 -keyout ${TESTDIR}/tls-private-key.pem \
+    -out ${TESTDIR}/tls-self-signed-cert.pem
+
 # Start the gateway and point it at the data plane
 ${GATEWAY_BIN} \
   --port=${GATEWAY_PORT} \
   --broker-address=${BROKER_ADDRESS} \
   --consumer-address=${CONSUMER_ADDRESS} \
+  --tls-certificate=${TESTDIR}/tls-self-signed-cert.pem \
+  --tls-private-key=${TESTDIR}/tls-private-key.pem \
   &
 GATEWAY_PID=$!
 
