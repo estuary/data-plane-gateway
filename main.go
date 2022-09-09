@@ -25,10 +25,12 @@ var (
 	corsOrigin         = flag.String("cors-origin", "*", "CORS Origin")
 	jwtVerificationKey = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
 	plainPort          = flag.String("plain-port", "28317", "Port for unencrypted communication")
-	tlsPort            = flag.String("port", "28318", "Service port for HTTP and gRPC requests. A random port is used if not set. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
+	tlsPort            = flag.String("port", "28318", "Service port for HTTPS and gRPC requests. A random port is used if not set. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
 	zone               = flag.String("zone", "local", "Availability zone within which this process is running")
-	tls_cert           = flag.String("tls-certificate", "", "Path to the TLS certificate (.crt) to use.")
-	tls_private_key    = flag.String("tls-private-key", "", "The private key for the TLS certificate")
+
+	// Args for providing the tls certificate the old fashioned way
+	tls_cert        = flag.String("tls-certificate", "", "Path to the TLS certificate (.crt) to use.")
+	tls_private_key = flag.String("tls-private-key", "", "The private key for the TLS certificate")
 
 	// Args that are required for automatically acquiring TLS certificates
 	autoAcquireCert      = flag.String("auto-tls-cert", "dpg-domain-name.example", "Automatically acquire TLS certificate from Let's Encrypt for the given domain using the ACME protocol")
@@ -119,7 +121,7 @@ func main() {
 	} else if *autoAcquireCert != "" {
 
 		var etcdUrls = getEtcdUrls()
-		certProvider, err := InitAutocert(*autoAcquireCert, etcdUrls, *autoAcquireCertEmail)
+		certProvider, err := NewCertProvider(*autoAcquireCert, etcdUrls, *autoAcquireCertEmail)
 		if err != nil {
 			panic(fmt.Sprintf("initializing autocert: %v", err))
 		}
