@@ -1,6 +1,6 @@
 # Build Stage
 ################################################################################
-FROM golang:1.18-buster as builder
+FROM golang:1.19-buster as builder
 
 WORKDIR /builder
 
