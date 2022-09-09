@@ -14,7 +14,7 @@ We use the [grpc-gateway](https://github.com/grpc-ecosystem/grpc-gateway/) proje
 
 The GRPC side of the Gateway proxies requests to our main Gazette cluster. First we check for an authentication token issued by the Control Plane. This token provides us with a set of authorized prefixes. We authorize requests by checking the provided label selectors on a request against these authorized prefixes. Once authorized, requests are sent along to Gazette proper.
 
-## Usage
+## Build
 
 To build the Gateway:
 
@@ -24,13 +24,25 @@ go build .
 go install .
 ```
 
-To run the Gateway:
+## Usage
+
+The data plane gateway always requires TLS. You can either provide the certificate yourself, or have it automatically provision its own certificate. There is no option for running without TLS. Both of the following commands launche the Gateway on port 28318. This port will serve both the REST (HTTPS) and GRPC traffic. The gateway will also listen on a non-tls port, but on this port it will only serve the health check endpoint and the ACME challenge responses (if automatic cert management is enabled).
+
+To run the Gateway using an existing TLS certificate:
 
 ```console
-data-plane-gateway
+data-plane-gateway --tls-certificate /path/to/cert.pem --tls-private-key /path/to/key.pem
 ```
 
-This launches the Gateway on port 28318. This port will serve both the REST and GRPC traffic. Use `data-plane-gateway --help` for more options.
+The gateway can also be made to provision and renew its own TLS certificate automatically, using Let's Encrypt and the `autocert` package:
+
+```console
+data-plane-gateway --auto-tls-cert <hostname> --tls-cert-email <email-address> --etcd-endpoint <etcd-url>
+```
+
+The `<hostname>` will be used as the subject common name of the certificate, and the server must be reachable by that name. Etcd is used to persist both the certificate itself, as well as any intermediate data that's used to obtain it.
+
+Use `data-plane-gateway --help` for more options.
 
 ## Development
 
