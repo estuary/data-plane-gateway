@@ -44,7 +44,7 @@ func (p *CertProvider) TLSConfig() *tls.Config {
 		// We don't use acManager.TLSConfig() because that function adds the ACME challenge protocol
 		// to NextProtos, and that challenge method won't work for us.
 		NextProtos:     []string{"h2", "http/1.1"},
-		GetCertificate: p.acManager.GetCertificate,
+		GetCertificate: p.GetCertificate,
 	}
 }
 
