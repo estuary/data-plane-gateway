@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/jamiealquiza/envy"
@@ -36,6 +37,7 @@ var (
 	autoAcquireCert      = flag.String("auto-tls-cert", "dpg-domain-name.example", "Automatically acquire TLS certificate from Let's Encrypt for the given domain using the ACME protocol")
 	etcdEndpoint         = flag.String("etcd-endpoint", "localhost:2379", "comma separated list of ETCD endpoints to connect to for managing TLS certificates. Only used when auto-tls-cert argument is provided")
 	autoAcquireCertEmail = flag.String("tls-cert-email", "", "email address to associate with the automatically acquired TLS certificate")
+	autoRenewCertBefore  = flag.Int("tls-renew-before-days", 30, "attempt to renew the certificate this many days before it expires")
 )
 
 var corsConfig *corsSettings
@@ -119,11 +121,14 @@ func main() {
 		}
 		tlsListener = tls.NewListener(tlsListener, &config)
 	} else if *autoAcquireCert != "" {
-
 		var etcdUrls = getEtcdUrls()
-		certProvider, err := NewCertProvider(*autoAcquireCert, etcdUrls, *autoAcquireCertEmail)
+		if *autoRenewCertBefore < 0 {
+			log.Fatalf("--tls-renew-before-days must not be negative")
+		}
+		var certRenewBefore = 24 * time.Hour * time.Duration(*autoRenewCertBefore)
+		certProvider, err := NewCertProvider(*autoAcquireCert, etcdUrls, *autoAcquireCertEmail, certRenewBefore)
 		if err != nil {
-			panic(fmt.Sprintf("initializing autocert: %v", err))
+			log.Fatalf("initializing autocert: %v", err)
 		}
 		tlsListener = tls.NewListener(tlsListener, certProvider.TLSConfig())
 		// Plain http will respond to ACME http-01 challenges and health checks.
