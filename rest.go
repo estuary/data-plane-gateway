@@ -14,7 +14,6 @@ import (
 	_ "go.gazette.dev/core/broker/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 
 	bgw "github.com/estuary/data-plane-gateway/gen/broker/protocol"
 	cgw "github.com/estuary/data-plane-gateway/gen/consumer/protocol"
@@ -42,18 +41,10 @@ func NewRestServer(ctx context.Context, gatewayAddr string) http.Handler {
 		runtime.WithProtoErrorHandler(runtime.DefaultHTTPProtoErrorHandler),
 	)
 
-	var creds credentials.TransportCredentials
-	if *tls_cert == "" {
-		creds = insecure.NewCredentials()
-	} else {
-		// If we're using a self-signed cert, then we need to skip verification.
-		// The cert _could_ be legit, but we don't really care, since we're only connecting on
-		// localhost anyway.
-		creds = credentials.NewTLS(&tls.Config{
-			InsecureSkipVerify: true,
-		})
-	}
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
+	// Since we dial ourselves on the loopback address, the hostname won't match the TLS cert.
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+		InsecureSkipVerify: true,
+	}))}
 
 	err = bgw.RegisterJournalHandlerFromEndpoint(ctx, mux, gatewayAddr, opts)
 	if err != nil {
