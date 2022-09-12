@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-func NewCertProvider(hostname string, etcdUrls []string, certificateEmail string) (*CertProvider, error) {
+func NewCertProvider(hostname string, etcdUrls []string, certificateEmail string, certRenewBefore time.Duration) (*CertProvider, error) {
 	var etcdClient, err = etcd.New(etcd.Config{
 		Endpoints: etcdUrls,
 	})
@@ -26,7 +26,7 @@ func NewCertProvider(hostname string, etcdUrls []string, certificateEmail string
 			Cache:       newEtcdCache(hostname, etcdClient),
 			HostPolicy:  autocert.HostWhitelist(hostname),
 			Email:       certificateEmail,
-			RenewBefore: CertRenewBefore,
+			RenewBefore: certRenewBefore,
 		},
 	}, nil
 }
@@ -86,7 +86,7 @@ func newEtcdCache(hostname string, client *etcd.Client) *etcdCache {
 	return &etcdCache{
 		localCache: localCache,
 		client:     client,
-		prefix:     etcdCachePrefix(hostname),
+		prefix:     fmt.Sprintf("/data-plane-gateway/%s/cache/", hostname),
 	}
 }
 
@@ -141,26 +141,3 @@ func (c *etcdCache) Delete(ctx context.Context, key string) error {
 	}
 	return nil
 }
-
-func (p *CertProvider) etcdMutexName() string {
-	return fmt.Sprintf("%s/%s/mutex/", BaseEtcdPrefix, p.hostname)
-}
-
-func etcdCachePrefix(hostname string) string {
-	return fmt.Sprintf("%s/%s/cache/", BaseEtcdPrefix, hostname)
-}
-
-const BaseEtcdPrefix = "/data-plane-gateway"
-
-// Determines when to start trying to renew the certificate. This duration is subtracted from the
-// expiration datetime of the certificate, and the result is roughly when autocert will attempt to
-// renew it.
-const CertRenewBefore = 30 * 24 * time.Hour
-
-// Certificate renewal is a little tricky because of the extra layer of cacheing we have going on,
-// so this time buffer is used to augment CertRenewBefore in order to determine when to invalidate
-// our cached certificate. We don't want to invalidate our cache before the renewal is complete
-// because we need to lock an expensive distributed mutex in order to even attempt to get the new
-// certificate from the `autocert.Manager`. So we wait this amount of time _after_ autocert is
-// supposed to try the renewal before we start asking it for the new certificate.
-const CertRenewBuffer = time.Hour
