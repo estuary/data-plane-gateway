@@ -26,7 +26,7 @@ var (
 	corsOrigin         = flag.String("cors-origin", "*", "CORS Origin")
 	jwtVerificationKey = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
 	plainPort          = flag.String("plain-port", "28317", "Port for unencrypted communication")
-	tlsPort            = flag.String("port", "28318", "Service port for HTTPS and gRPC requests. A random port is used if not set. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
+	tlsPort            = flag.String("port", "28318", "Service port for HTTPS and gRPC requests. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
 	zone               = flag.String("zone", "local", "Availability zone within which this process is running")
 
 	// Args for providing the tls certificate the old fashioned way
@@ -35,7 +35,7 @@ var (
 
 	// Args that are required for automatically acquiring TLS certificates
 	autoAcquireCert      = flag.String("auto-tls-cert", "dpg-domain-name.example", "Automatically acquire TLS certificate from Let's Encrypt for the given domain using the ACME protocol")
-	etcdEndpoint         = flag.String("etcd-endpoint", "localhost:2379", "comma separated list of ETCD endpoints to connect to for managing TLS certificates. Only used when auto-tls-cert argument is provided")
+	etcdEndpoint         = flag.String("etcd-endpoint", "localhost:2379", "ETCD URL to connect to for managing TLS certificates. Only used when auto-tls-cert argument is provided")
 	autoAcquireCertEmail = flag.String("tls-cert-email", "", "email address to associate with the automatically acquired TLS certificate")
 	autoRenewCertBefore  = flag.Int("tls-renew-before-days", 30, "attempt to renew the certificate this many days before it expires")
 )
@@ -91,7 +91,6 @@ func main() {
 		Addr: fmt.Sprintf(":%s", *plainPort),
 	}
 	var httpsServer = &http.Server{
-		//Handler: h2c.NewHandler(mixedHandler, &http2Server),
 		Handler: mixedHandler,
 	}
 
@@ -121,12 +120,11 @@ func main() {
 		}
 		tlsListener = tls.NewListener(tlsListener, &config)
 	} else if *autoAcquireCert != "" {
-		var etcdUrls = getEtcdUrls()
 		if *autoRenewCertBefore < 0 {
 			log.Fatalf("--tls-renew-before-days must not be negative")
 		}
 		var certRenewBefore = 24 * time.Hour * time.Duration(*autoRenewCertBefore)
-		certProvider, err := NewCertProvider(*autoAcquireCert, etcdUrls, *autoAcquireCertEmail, certRenewBefore)
+		certProvider, err := NewCertProvider(*autoAcquireCert, *etcdEndpoint, *autoAcquireCertEmail, certRenewBefore)
 		if err != nil {
 			log.Fatalf("initializing autocert: %v", err)
 		}
@@ -155,15 +153,4 @@ func main() {
 
 	log.Println("goodbye")
 	os.Exit(0)
-}
-
-func getEtcdUrls() []string {
-	var etcdUrls = strings.Split(*etcdEndpoint, ",")
-
-	for _, url := range etcdUrls {
-		if len(url) == 0 {
-			panic(fmt.Sprintf("invalid etcd urls argument: '%s', value must be a non-empty comma-separated list of URLs", *etcdEndpoint))
-		}
-	}
-	return etcdUrls
 }

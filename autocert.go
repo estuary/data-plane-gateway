@@ -12,12 +12,13 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-func NewCertProvider(hostname string, etcdUrls []string, certificateEmail string, certRenewBefore time.Duration) (*CertProvider, error) {
-	var etcdClient, err = etcd.New(etcd.Config{
-		Endpoints: etcdUrls,
-	})
+func NewCertProvider(hostname string, etcdUrl string, certificateEmail string, certRenewBefore time.Duration) (*CertProvider, error) {
+	var etcdClient, err = etcd.NewFromURL(etcdUrl)
 	if err != nil {
 		return nil, fmt.Errorf("creating etcd client: %w", err)
+	}
+	if err = etcdClient.Sync(context.Background()); err != nil {
+		return nil, fmt.Errorf("syncing etcd members: %w", err)
 	}
 	return &CertProvider{
 		hostname: hostname,
