@@ -3,6 +3,7 @@ package main
 import (
 	context "context"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -36,14 +37,12 @@ func authorized(ctx context.Context) (*AuthorizedClaims, error) {
 func authorized_req(req *http.Request) (*AuthorizedClaims, error) {
 	auth := req.Header.Get("authorization")
 	if len(auth) == 0 {
-		return nil, fmt.Errorf("Unauthenticated: No Authorization")
-	} else if len(auth[0]) == 0 {
-		return nil, fmt.Errorf("Unauthenticated: Empty Authorization")
-	} else if !strings.HasPrefix(auth[0], "Bearer ") {
+		return nil, fmt.Errorf("Unauthenticated: Missing or empty authorization header")
+	} else if !strings.HasPrefix(auth, "Bearer ") {
 		return nil, fmt.Errorf("Unauthenticated: Authentication type must be `Bearer`")
 	}
 
-	value := strings.TrimPrefix(auth[0], "Bearer ")
+	value := strings.TrimPrefix(auth, "Bearer ")
 
 	return decodeJwt(value)
 }
