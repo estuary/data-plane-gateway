@@ -33,6 +33,21 @@ func authorized(ctx context.Context) (*AuthorizedClaims, error) {
 	return decodeJwt(value)
 }
 
+func authorized_req(req *http.Request) (*AuthorizedClaims, error) {
+	auth := req.Header.Get("authorization")
+	if len(auth) == 0 {
+		return nil, fmt.Errorf("Unauthenticated: No Authorization")
+	} else if len(auth[0]) == 0 {
+		return nil, fmt.Errorf("Unauthenticated: Empty Authorization")
+	} else if !strings.HasPrefix(auth[0], "Bearer ") {
+		return nil, fmt.Errorf("Unauthenticated: Authentication type must be `Bearer`")
+	}
+
+	value := strings.TrimPrefix(auth[0], "Bearer ")
+
+	return decodeJwt(value)
+}
+
 type AuthorizedClaims struct {
 	Prefixes  []string `json:"prefixes"`
 	Operation string   `json:"operation"`
