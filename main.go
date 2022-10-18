@@ -5,9 +5,9 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -72,39 +72,44 @@ func main() {
 	// Inspired partially by https://gist.github.com/yowu/f7dc34bd4736a65ff28d
 	var schemaInferenceHandler = http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 		// Do auth
-			// Pull JWT from authz header
-				// See auth.go:authorized()
-			// decodeJWT(that bearer token) -> AuthorizedClaims
+		// Pull JWT from authz header
+		// See auth.go:authorized()
+		// decodeJWT(that bearer token) -> AuthorizedClaims
 		claims, err := authorized_req(req)
 		if err != nil {
-			return 401, err
+			http.Error(writer, err.Error(), http.StatusUnauthorized)
+			return
 		}
 
 		collection_name := req.URL.Query().Get("collection_name")
 		authorization_error := enforcePrefix(claims, collection_name)
 
 		// enforcePrefix(claims, collection_name)
-			// collection_name comes from actual inference request
+		// collection_name comes from actual inference request
 		if authorization_error != nil {
-			return 403, authorization_error
+			http.Error(writer, authorization_error.Error(), http.StatusForbidden)
+			return
 		}
 
 		// Call inference
-		inference_response, inference_error := http.Get(fmt.Sprintf("http://%s/infer_schema?%s", *inferenceAddr, *req.URL.RawQuery))
+		inference_response, inference_error := http.Get(fmt.Sprintf("http://%s/infer_schema?%s", *inferenceAddr, req.URL.RawQuery))
 
 		if inference_error != nil {
-			// An error is returned if there were too many redirects or if there was an HTTP protocol error. 
+			// An error is returned if there were too many redirects or if there was an HTTP protocol error.
 			// A non-2xx response doesn't cause an error.
-			return 500, inference_error
+			http.Error(writer, inference_error.Error(), http.StatusInternalServerError)
+			return
 		}
 
-		defer resp.Body.Close()
+		defer inference_response.Body.Close()
 		// Return result
 
 		copyHeader(writer.Header(), inference_response.Header)
-		wr.WriteHeader(inference_response.StatusCode)
+		writer.WriteHeader(inference_response.StatusCode)
 		io.Copy(writer, inference_response.Body)
 	})
+
+	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
 
 	plainMux := http.NewServeMux()
 	plainMux.Handle("/healthz", healthHandler)
@@ -112,7 +117,6 @@ func main() {
 	plainMux.Handle("/", restHandler)
 
 	httpsMux := http.NewServeMux()
-	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
 	httpsMux.Handle("/healthz", healthHandler)
 	httpsMux.Handle("/infer_schema", schemaInferenceHandler)
 	httpsMux.Handle("/", restHandler)
@@ -132,7 +136,7 @@ func main() {
 
 	var plainServer = &http.Server{
 		Handler: plainMux,
-		Addr: fmt.Sprintf(":%s", *plainPort),
+		Addr:    fmt.Sprintf(":%s", *plainPort),
 	}
 	var httpsServer = &http.Server{
 		Handler: mixedHandler,
