@@ -20,13 +20,11 @@ export interface ApplyRequestChange {
    * @format int64
    */
   expectModRevision?: string;
-
   /**
    * JournalSpec to be updated (if expect_mod_revision > 0) or created
    * (if expect_mod_revision == 0).
    */
   upsert?: ProtocolJournalSpec;
-
   /** Journal to be deleted. expect_mod_revision must not be zero. */
   delete?: string;
 }
@@ -41,7 +39,6 @@ export interface FragmentsResponseFragment {
    * SHA1 sum of the corresponding Journal content.
    */
   spec?: ProtocolFragment;
-
   /**
    * SignedURL is a temporary URL at which a direct GET of the Fragment may
    * be issued, signed by the broker's credentials. Set only if the request
@@ -66,20 +63,17 @@ export interface HeaderEtcd {
    * @format uint64
    */
   clusterId?: string;
-
   /**
    * member_id is the ID of the member.
    * @format uint64
    */
   memberId?: string;
-
   /**
    * revision is the Etcd key-value store revision when the request was
    * applied.
    * @format int64
    */
   revision?: string;
-
   /**
    * raft_term is the raft term when the request was applied.
    * @format uint64
@@ -93,13 +87,11 @@ export interface HeaderEtcd {
 export interface ListResponseJournal {
   /** JournalSpec describes a Journal and its configuration. */
   spec?: ProtocolJournalSpec;
-
   /**
    * Current ModRevision of the JournalSpec.
    * @format int64
    */
   modRevision?: string;
-
   /** Route of the journal, including endpoints. */
   route?: ProtocolRoute;
 }
@@ -116,7 +108,6 @@ export interface ProcessSpecID {
    * example, by proxying reads to a broker in the current zone).
    */
   zone?: string;
-
   /**
    * Unique suffix of the process within |zone|. It is permissible for a
    * suffix value to repeat across zones, but never within zones. In practice,
@@ -128,7 +119,6 @@ export interface ProcessSpecID {
 
 export interface ProtobufAny {
   typeUrl?: string;
-
   /** @format byte */
   value?: string;
 }
@@ -139,25 +129,20 @@ export interface ProtobufAny {
 export interface ProtocolAppendResponse {
   /** Status of the Append RPC. */
   status?: ProtocolStatus;
-
   /** Header of the response. */
   header?: ProtocolHeader;
-
   /**
    * If status is OK, then |commit| is the Fragment which places the
    * committed Append content within the Journal.
    */
   commit?: ProtocolFragment;
-
   /** Current registers of the journal. */
   registers?: ProtocolLabelSet;
-
   /**
    * Total number of RPC content chunks processed in this append.
    * @format int64
    */
   totalChunks?: string;
-
   /**
    * Number of content chunks which were delayed by journal flow control.
    * @format int64
@@ -171,7 +156,6 @@ export interface ProtocolAppendResponse {
 export interface ProtocolApplyResponse {
   /** Status of the Apply RPC. */
   status?: ProtocolStatus;
-
   /** Header of the response. */
   header?: ProtocolHeader;
 }
@@ -216,36 +200,29 @@ SHA1 sum of the corresponding Journal content.
 export interface ProtocolFragment {
   /** Journal of the Fragment. */
   journal?: string;
-
   /**
    * Begin (inclusive) and end (exclusive) offset of the Fragment within the
    * Journal.
    * @format int64
    */
   begin?: string;
-
   /** @format int64 */
   end?: string;
-
   /** SHA1 sum of the Fragment's content. */
   sum?: ProtocolSHA1Sum;
-
   /** Codec with which the Fragment's content is compressed. */
   compressionCodec?: ProtocolCompressionCodec;
-
   /**
    * Fragment store which backs the Fragment. Empty if the Fragment has yet to
    * be persisted and is still local to a Broker.
    */
   backingStore?: string;
-
   /**
    * Modification timestamp of the Fragment within the backing store,
    * represented as seconds since the epoch.
    * @format int64
    */
   modTime?: string;
-
   /**
    * Path postfix under which the fragment is persisted to the store.
    * The complete Fragment store path is built from any path components of the
@@ -261,11 +238,9 @@ RPC.
 export interface ProtocolFragmentsResponse {
   /** Status of the Apply RPC. */
   status?: ProtocolStatus;
-
   /** Header of the response. */
   header?: ProtocolHeader;
   fragments?: FragmentsResponseFragment[];
-
   /**
    * The NextPageToke value to be returned on subsequent Fragments requests. If
    * the value is zero then there are no more fragments to be returned for this
@@ -286,13 +261,11 @@ export interface ProtocolHeader {
    * dispatched to any member of the Route.
    */
   processId?: ProcessSpecID;
-
   /**
    * Route of processes specifically responsible for this RPC, or an empty Route
    * if any process is capable of serving the RPC.
    */
   route?: ProtocolRoute;
-
   /**
    * Etcd represents the effective Etcd MVCC state under which a Gazette broker
    * is operating in its processing of requests and responses. Its inclusion
@@ -312,7 +285,6 @@ export interface ProtocolHeader {
 export interface ProtocolJournalSpec {
   /** Name of the Journal. */
   name?: string;
-
   /**
    * Desired replication of this Journal. This defines the Journal's tolerance
    * to broker failures before data loss can occur (eg, a replication factor
@@ -320,26 +292,22 @@ export interface ProtocolJournalSpec {
    * @format int32
    */
   replication?: number;
-
   /**
    * User-defined Labels of this JournalSpec. Two label names are reserved
    * and may not be used within a JournalSpec's Labels: "name" and "prefix".
    */
   labels?: ProtocolLabelSet;
-
   /**
    * Fragment is JournalSpec configuration which pertains to the creation,
    * persistence, and indexing of the Journal's Fragments.
    */
   fragment?: ProtocolJournalSpecFragment;
-
   /**
    * Flags of the Journal, as a combination of Flag enum values. The Flag enum
    * is not used directly, as protobuf enums do not allow for or'ed bitfields.
    * @format int64
    */
   flags?: number;
-
   /**
    * Maximum rate, in bytes-per-second, at which appends of this journal will
    * be processed. If zero (the default), no rate limiting is applied. A global
@@ -364,10 +332,8 @@ export interface ProtocolJournalSpecFragment {
    * @format int64
    */
   length?: string;
-
   /** Codec used to compress Journal Fragments. */
   compressionCodec?: ProtocolCompressionCodec;
-
   /**
    * Storage backend base path for this Journal's Fragments. Must be in URL
    * form, with the choice of backend defined by the scheme. The full path of
@@ -390,20 +356,17 @@ export interface ProtocolJournalSpecFragment {
    * needed.
    */
   stores?: string[];
-
   /**
    * Interval of time between refreshes of remote Fragment listings from
    * configured fragment_stores.
    */
   refreshInterval?: string;
-
   /**
    * Retention duration for historical Fragments of this Journal within the
    * Fragment stores. If less than or equal to zero, Fragments are retained
    * indefinitely.
    */
   retention?: string;
-
   /**
    * Flush interval defines a uniform UTC time segment which, when passed,
    * will prompt brokers to close and persist a fragment presently being
@@ -419,7 +382,6 @@ export interface ProtocolJournalSpecFragment {
    * See also "gazctl journals fragments --help" for more discussion.
    */
   flushInterval?: string;
-
   /**
    * Path postfix template is a Go template which evaluates to a partial
    * path under which fragments are persisted to the store. A complete
@@ -458,7 +420,6 @@ export interface ProtocolLabelSelector {
    * matched by a Label of the same name having any value.
    */
   include?: ProtocolLabelSet;
-
   /**
    * Exclude is Labels which cannot be matched for a LabelSet to be selected. If
    * empty, no Labels are excluded. An exclude Label with empty ("") value
@@ -498,7 +459,6 @@ export interface ProtocolListRequest {
 export interface ProtocolListResponse {
   /** Status of the List RPC. */
   status?: ProtocolStatus;
-
   /** Header of the response. */
   header?: ProtocolHeader;
   journals?: ListResponseJournal[];
@@ -510,10 +470,8 @@ export interface ProtocolListResponse {
 export interface ProtocolReadRequest {
   /** Header is attached by a proxying broker peer. */
   header?: ProtocolHeader;
-
   /** Journal to be read. */
   journal?: string;
-
   /**
    * Desired offset to begin reading from. Value -1 has special handling, where
    * the read is performed from the current write head. All other positive
@@ -524,26 +482,22 @@ export interface ProtocolReadRequest {
    * @format int64
    */
   offset?: string;
-
   /**
    * Whether the operation should block until content becomes available.
    * OFFSET_NOT_YET_AVAILABLE is returned if a non-blocking read has no ready
    * content.
    */
   block?: boolean;
-
   /**
    * If do_not_proxy is true, the broker will not proxy the read to another
    * broker, or open and proxy a remote Fragment on the client's behalf.
    */
   doNotProxy?: boolean;
-
   /**
    * If metadata_only is true, the broker will respond with Journal and
    * Fragment metadata but not content.
    */
   metadataOnly?: boolean;
-
   /**
    * Offset to read through. If zero, then the read end offset is unconstrained.
    * @format int64
@@ -552,6 +506,8 @@ export interface ProtocolReadRequest {
 }
 
 /**
+* ReadResponse is the streamed response message of the broker Read RPC.
+Responses messages are of two types:
 * * "Metadata" messages, which conveys the journal Fragment addressed by the
    request which is ready to be read.
 * "Chunk" messages, which carry associated journal Fragment content bytes.
@@ -566,19 +522,16 @@ is assured that its associated chunk messages are immediately forthcoming.
 export interface ProtocolReadResponse {
   /** Status of the Read RPC. */
   status?: ProtocolStatus;
-
   /**
    * Header of the response. Accompanies the first ReadResponse of the response
    * stream.
    */
   header?: ProtocolHeader;
-
   /**
    * The effective offset of the read. See ReadRequest offset.
    * @format int64
    */
   offset?: string;
-
   /**
    * The offset to next be written, by the next append transaction served by
    * broker. In other words, the last offset through which content is
@@ -587,16 +540,13 @@ export interface ProtocolReadResponse {
    * @format int64
    */
   writeHead?: string;
-
   /**
    * Fragment to which the offset was mapped. This is a metadata field and will
    * not be returned with a content response.
    */
   fragment?: ProtocolFragment;
-
   /** If Fragment is remote, a URL from which it may be directly read. */
   fragmentUrl?: string;
-
   /**
    * Content chunks of the read.
    * @format byte
@@ -612,20 +562,17 @@ ReplicateRequest with |acknowledge| set.
 export interface ProtocolReplicateResponse {
   /** Status of the Replicate RPC. */
   status?: ProtocolStatus;
-
   /**
    * Header of the response. Accompanies the first ReplicateResponse of the
    * response stream.
    */
   header?: ProtocolHeader;
-
   /**
    * If status is PROPOSAL_MISMATCH, then |fragment| is the replica's current
    * journal Fragment, and either it or |registers| will differ from the
    * primary's proposal.
    */
   fragment?: ProtocolFragment;
-
   /**
    * If status is PROPOSAL_MISMATCH, then |registers| are the replica's current
    * journal registers.
@@ -639,14 +586,12 @@ export interface ProtocolReplicateResponse {
 export interface ProtocolRoute {
   /** Members of the Route, ordered on ascending ProcessSpec.ID (zone, suffix). */
   members?: ProcessSpecID[];
-
   /**
    * Index of the ProcessSpec serving as primary within |members|,
    * or -1 of no member is currently primary.
    * @format int32
    */
   primary?: number;
-
   /**
    * Endpoints of each Route member. If not empty, |endpoints| has the same
    * length and order as |members|, and captures the endpoint of each one.
@@ -660,10 +605,8 @@ export interface ProtocolRoute {
 export interface ProtocolSHA1Sum {
   /** @format uint64 */
   part1?: string;
-
   /** @format uint64 */
   part2?: string;
-
   /** @format int64 */
   part3?: number;
 }
@@ -716,7 +659,6 @@ export type ProtocolStatus =
 
 export interface RuntimeError {
   error?: string;
-
   /** @format int32 */
   code?: number;
   message?: string;
@@ -726,7 +668,6 @@ export interface RuntimeError {
 export interface RuntimeStreamError {
   /** @format int32 */
   grpcCode?: number;
-
   /** @format int32 */
   httpCode?: number;
   message?: string;

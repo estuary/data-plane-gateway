@@ -30,20 +30,17 @@ export interface HeaderEtcd {
    * @format uint64
    */
   clusterId?: string;
-
   /**
    * member_id is the ID of the member.
    * @format uint64
    */
   memberId?: string;
-
   /**
    * revision is the Etcd key-value store revision when the request was
    * applied.
    * @format int64
    */
   revision?: string;
-
   /**
    * raft_term is the raft term when the request was applied.
    * @format uint64
@@ -68,16 +65,13 @@ export interface ListResponseShard {
    * ShardSpec is-a allocator.ItemValue.
    */
   spec?: ConsumerShardSpec;
-
   /**
    * Current ModRevision of the ShardSpec.
    * @format int64
    */
   modRevision?: string;
-
   /** Route of the shard, including endpoints. */
   route?: ProtocolRoute;
-
   /** Status of each replica. Cardinality and ordering matches |route|. */
   status?: ConsumerReplicaStatus[];
 }
@@ -94,7 +88,6 @@ export interface ProcessSpecID {
    * example, by proxying reads to a broker in the current zone).
    */
   zone?: string;
-
   /**
    * Unique suffix of the process within |zone|. It is permissible for a
    * suffix value to repeat across zones, but never within zones. In practice,
@@ -127,13 +120,11 @@ export interface ConsumerApplyRequestChange {
    * @format int64
    */
   expectModRevision?: string;
-
   /**
    * ShardSpec to be updated (if expect_mod_revision > 0) or created
    * (if expect_mod_revision == 0).
    */
   upsert?: ConsumerShardSpec;
-
   /** Shard to be deleted. expect_mod_revision must not be zero. */
   delete?: string;
 }
@@ -141,10 +132,8 @@ export interface ConsumerApplyRequestChange {
 export interface ConsumerApplyResponse {
   /** Status of the Apply RPC. */
   status?: ConsumerStatus;
-
   /** Header of the response. */
   header?: ProtocolHeader;
-
   /**
    * Optional extension of the ApplyResponse.
    * @format byte
@@ -155,20 +144,16 @@ export interface ConsumerApplyResponse {
 export interface ConsumerGetHintsResponse {
   /** Status of the Hints RPC. */
   status?: ConsumerStatus;
-
   /** Header of the response. */
   header?: ProtocolHeader;
-
   /** Primary hints for the shard. */
   primaryHints?: GetHintsResponseResponseHints;
-
   /**
    * List of backup hints for a shard. The most recent recovery log hints will
    * be first, any subsequent hints are for historical backup. If there is no
    * value for a hint key the value corresponding hints will be nil.
    */
   backupHints?: GetHintsResponseResponseHints[];
-
   /**
    * Optional extension of the GetHintsResponse.
    * @format byte
@@ -185,7 +170,6 @@ export interface ConsumerListRequest {
    * will match a ShardSpec with ID "example-shard-ID".
    */
   selector?: ProtocolLabelSelector;
-
   /**
    * Optional extension of the ListRequest.
    * @format byte
@@ -196,11 +180,9 @@ export interface ConsumerListRequest {
 export interface ConsumerListResponse {
   /** Status of the List RPC. */
   status?: ConsumerStatus;
-
   /** Header of the response. */
   header?: ProtocolHeader;
   shards?: ListResponseShard[];
-
   /**
    * Optional extension of the ListResponse.
    * @format byte
@@ -228,7 +210,6 @@ export interface ConsumerReplicaStatus {
    *  - FAILED: The replica has encountered an unrecoverable error.
    */
   code?: ReplicaStatusCode;
-
   /** Errors encountered during replica processing. Set iff |code| is FAILED. */
   errors?: string[];
 }
@@ -248,17 +229,14 @@ ShardSpec is-a allocator.ItemValue.
 export interface ConsumerShardSpec {
   /** ID of the shard. */
   id?: string;
-
   /** Sources of the shard, uniquely ordered on Source journal. */
   sources?: ConsumerShardSpecSource[];
-
   /**
    * Prefix of the Journal into which the shard's recovery log will be recorded.
    * The complete Journal name is built as "{recovery_log_prefix}/{shard_id}".
    * If empty, the shard does not use a recovery log.
    */
   recoveryLogPrefix?: string;
-
   /**
    * Prefix of Etcd keys into which recovery log FSMHints are written to and
    * read from. FSMHints allow readers of the recovery log to efficiently
@@ -271,7 +249,6 @@ export interface ConsumerShardSpec {
    * If |recovery_log_prefix| is set, |hint_prefix| must be also.
    */
   hintPrefix?: string;
-
   /**
    * Backups of verified recovery log FSMHints, retained as a disaster-recovery
    * mechanism. On completing playback, a player will write recovered hints to:
@@ -291,7 +268,6 @@ export interface ConsumerShardSpec {
    * @format int32
    */
   hintBackups?: number;
-
   /**
    * Max duration of shard transactions. This duration upper-bounds the amount
    * of time during which a transaction may process messages before it must
@@ -302,7 +278,6 @@ export interface ConsumerShardSpec {
    * values.
    */
   maxTxnDuration?: string;
-
   /**
    * Min duration of shard transactions. This duration lower-bounds the amount
    * of time during which a transaction must process messages before it may
@@ -317,10 +292,8 @@ export interface ConsumerShardSpec {
    * extensive aggregation may benefit from larger values.
    */
   minTxnDuration?: string;
-
   /** Disable processing of the shard. */
   disable?: boolean;
-
   /**
    * Hot standbys is the desired number of consumer processes which should be
    * replicating the primary consumer's recovery log. Standbys are allocated in
@@ -338,13 +311,11 @@ export interface ConsumerShardSpec {
    * @format int64
    */
   hotStandbys?: number;
-
   /**
    * User-defined Labels of this ShardSpec. The label "id" is reserved and may
    * not be used with a ShardSpec's labels.
    */
   labels?: ProtocolLabelSet;
-
   /**
    * Disable waiting for acknowledgements of pending message(s).
    *
@@ -360,7 +331,6 @@ export interface ConsumerShardSpec {
    * produced -- an ACK which can't arrive until the transaction closes.
    */
   disableWaitForAck?: boolean;
-
   /**
    * Size of the ring buffer used to sequence read-uncommitted messages
    * into consumed, read-committed ones. The ring buffer is a performance
@@ -373,7 +343,6 @@ export interface ConsumerShardSpec {
    * @format int64
    */
   ringBufferSize?: number;
-
   /**
    * Size of the channel used to bridge message read and decode with
    * sequencing and consumption. Larger values may reduce data stalls,
@@ -405,7 +374,6 @@ purchase publish the bundle of its corresponding prior product views.
 export interface ConsumerShardSpecSource {
   /** Journal which this shard is consuming. */
   journal?: string;
-
   /**
    * Minimum journal byte offset the shard should begin reading from.
    * Typically this should be zero, as read offsets are check-pointed and
@@ -420,17 +388,14 @@ export interface ConsumerShardSpecSource {
 export interface ConsumerStatRequest {
   /** Header may be attached by a proxying consumer peer. */
   header?: ProtocolHeader;
-
   /** Shard to Stat. */
   shard?: string;
-
   /**
    * Journals and offsets which must be reflected in a completed consumer
    * transaction before Stat returns, blocking if required. Offsets of journals
    * not read by this shard are ignored.
    */
   readThrough?: Record<string, string>;
-
   /**
    * Optional extension of the StatRequest.
    * @format byte
@@ -441,16 +406,13 @@ export interface ConsumerStatRequest {
 export interface ConsumerStatResponse {
   /** Status of the Stat RPC. */
   status?: ConsumerStatus;
-
   /** Header of the response. */
   header?: ProtocolHeader;
-
   /**
    * Journals and offsets read through by the most recent completed consumer
    * transaction.
    */
   readThrough?: Record<string, string>;
-
   /**
    * Journals and offsets this shard has published through, including
    * acknowledgements, as-of the most recent completed consumer transaction.
@@ -464,7 +426,6 @@ export interface ConsumerStatResponse {
    * before arriving at the materialized view which is ultimately queried.
    */
   publishAt?: Record<string, string>;
-
   /**
    * Optional extension of the StatResponse.
    * @format byte
@@ -501,14 +462,12 @@ export type ConsumerStatus =
 export interface ConsumerUnassignResponse {
   /** Status of the Unassign RPC. */
   status?: ConsumerStatus;
-
   /** Shards which had assignments removed. */
   shards?: string[];
 }
 
 export interface ProtobufAny {
   typeUrl?: string;
-
   /** @format byte */
   value?: string;
 }
@@ -524,13 +483,11 @@ export interface ProtocolHeader {
    * dispatched to any member of the Route.
    */
   processId?: ProcessSpecID;
-
   /**
    * Route of processes specifically responsible for this RPC, or an empty Route
    * if any process is capable of serving the RPC.
    */
   route?: ProtocolRoute;
-
   /**
    * Etcd represents the effective Etcd MVCC state under which a Gazette broker
    * is operating in its processing of requests and responses. Its inclusion
@@ -565,7 +522,6 @@ export interface ProtocolLabelSelector {
    * matched by a Label of the same name having any value.
    */
   include?: ProtocolLabelSet;
-
   /**
    * Exclude is Labels which cannot be matched for a LabelSet to be selected. If
    * empty, no Labels are excluded. An exclude Label with empty ("") value
@@ -588,14 +544,12 @@ export interface ProtocolLabelSet {
 export interface ProtocolRoute {
   /** Members of the Route, ordered on ascending ProcessSpec.ID (zone, suffix). */
   members?: ProcessSpecID[];
-
   /**
    * Index of the ProcessSpec serving as primary within |members|,
    * or -1 of no member is currently primary.
    * @format int32
    */
   primary?: number;
-
   /**
    * Endpoints of each Route member. If not empty, |endpoints| has the same
    * length and order as |members|, and captures the endpoint of each one.
@@ -622,10 +576,8 @@ export interface RecoverylogFSMHints {
    * entirely addressing a single log.
    */
   log?: string;
-
   /** Live Fnodes and their Segments as-of the generation of these FSMHints. */
   liveNodes?: RecoverylogFnodeSegments[];
-
   /** Property files and contents as-of the generation of these FSMHints. */
   properties?: RecoverylogProperty[];
 }
@@ -639,7 +591,6 @@ export interface RecoverylogFnodeSegments {
    * @format int64
    */
   fnode?: string;
-
   /**
    * Segments of the Fnode in the log. Currently, FSM tracks only a single
    * Segment per Fnode per Author & Log. A specific implication of this is that Fnodes
@@ -661,7 +612,6 @@ outside of regular Fnode tracking. See FSM.Properties.
 export interface RecoverylogProperty {
   /** Filesystem path of this property, relative to the common base directory. */
   path?: string;
-
   /** Complete file content of this property. */
   content?: string;
 }
@@ -684,13 +634,11 @@ export interface RecoverylogSegment {
    * @format int64
    */
   author?: number;
-
   /**
    * First (lowest) sequence number of RecordedOps within this Segment.
    * @format int64
    */
   firstSeqNo?: string;
-
   /**
    * First byte offset of the Segment, where |first_seq_no| is recorded.
    * If this Segment was produced by a Recorder, this is guaranteed only to be a
@@ -701,33 +649,28 @@ export interface RecoverylogSegment {
    * @format int64
    */
   firstOffset?: string;
-
   /**
    * Checksum of the RecordedOp having |first_seq_no|.
    * @format int64
    */
   firstChecksum?: number;
-
   /**
    * Last (highest, inclusive) sequence number of RecordedOps within this Segment.
    * @format int64
    */
   lastSeqNo?: string;
-
   /**
    * Last offset (exclusive) of the Segment. Zero means the offset is not known
    * (eg, because the Segment was produced by a Recorder).
    * @format int64
    */
   lastOffset?: string;
-
   /** Log is the Journal holding this Segment's data, and to which offsets are relative. */
   log?: string;
 }
 
 export interface RuntimeError {
   error?: string;
-
   /** @format int32 */
   code?: number;
   message?: string;
