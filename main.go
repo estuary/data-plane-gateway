@@ -81,7 +81,7 @@ func main() {
 			return
 		}
 
-		collection_name := req.URL.Query().Get("collection_name")
+		collection_name := req.URL.Query().Get("collection")
 		authorization_error := enforcePrefix(claims, collection_name)
 
 		// enforcePrefix(claims, collection_name)
@@ -91,8 +91,13 @@ func main() {
 			return
 		}
 
+		// TODO: rename the argument to `?collection=...` in the schema inference service, then get rid of this:
+		args := req.URL.Query()
+		args.Set("collection_name", args.Get("collection"))
+		args.Del("collection")
+
 		// Call inference
-		inference_response, inference_error := http.Get(fmt.Sprintf("http://%s/infer_schema?%s", *inferenceAddr, req.URL.RawQuery))
+		inference_response, inference_error := http.Get(fmt.Sprintf("http://%s/infer_schema?%s", *inferenceAddr, args.Encode()))
 
 		if inference_error != nil {
 			// An error is returned if there were too many redirects or if there was an HTTP protocol error.
