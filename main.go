@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 var (
 	brokerAddr         = flag.String("broker-address", "localhost:8080", "Target broker address")
 	consumerAddr       = flag.String("consumer-address", "localhost:9000", "Target consumer address")
+	inferenceAddr      = flag.String("inference-address", "localhost:9090", "Target schema inference service address")
 	corsOrigin         = flag.String("cors-origin", "*", "CORS Origin")
 	jwtVerificationKey = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
 	plainPort          = flag.String("plain-port", "28317", "Port for unencrypted communication")
@@ -34,7 +36,7 @@ var (
 	tls_private_key = flag.String("tls-private-key", "", "The private key for the TLS certificate")
 
 	// Args that are required for automatically acquiring TLS certificates
-	autoAcquireCert      = flag.String("auto-tls-cert", "dpg-domain-name.example", "Automatically acquire TLS certificate from Let's Encrypt for the given domain using the ACME protocol")
+	autoAcquireCert      = flag.String("auto-tls-cert", "", "Automatically acquire TLS certificate from Let's Encrypt for the given domain using the ACME protocol")
 	etcdEndpoint         = flag.String("etcd-endpoint", "localhost:2379", "ETCD URL to connect to for managing TLS certificates. Only used when auto-tls-cert argument is provided")
 	autoAcquireCertEmail = flag.String("tls-cert-email", "", "email address to associate with the automatically acquired TLS certificate")
 	autoRenewCertBefore  = flag.Int("tls-renew-before-days", 30, "attempt to renew the certificate this many days before it expires")
@@ -66,12 +68,62 @@ func main() {
 		w.Write([]byte("OK\n"))
 	})
 
+	// Will be used with both http and https
+	// Inspired partially by https://gist.github.com/yowu/f7dc34bd4736a65ff28d
+	var schemaInferenceHandler = http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		// Do auth
+		// Pull JWT from authz header
+		// See auth.go:authorized()
+		// decodeJWT(that bearer token) -> AuthorizedClaims
+		claims, err := authorized_req(req)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		collection_name := req.URL.Query().Get("collection")
+		authorization_error := enforcePrefix(claims, collection_name)
+
+		// enforcePrefix(claims, collection_name)
+		// collection_name comes from actual inference request
+		if authorization_error != nil {
+			http.Error(writer, authorization_error.Error(), http.StatusForbidden)
+			return
+		}
+
+		// TODO: rename the argument to `?collection=...` in the schema inference service, then get rid of this:
+		args := req.URL.Query()
+		args.Set("collection_name", args.Get("collection"))
+		args.Del("collection")
+
+		// Call inference
+		inference_response, inference_error := http.Get(fmt.Sprintf("http://%s/infer_schema?%s", *inferenceAddr, args.Encode()))
+
+		if inference_error != nil {
+			// An error is returned if there were too many redirects or if there was an HTTP protocol error.
+			// A non-2xx response doesn't cause an error.
+			http.Error(writer, inference_error.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		defer inference_response.Body.Close()
+		// Return result
+
+		copyHeader(writer.Header(), inference_response.Header)
+		writer.WriteHeader(inference_response.StatusCode)
+		io.Copy(writer, inference_response.Body)
+	})
+
+	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
+
 	plainMux := http.NewServeMux()
 	plainMux.Handle("/healthz", healthHandler)
+	plainMux.Handle("/infer_schema", schemaInferenceHandler)
+	plainMux.Handle("/", restHandler)
 
 	httpsMux := http.NewServeMux()
-	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
 	httpsMux.Handle("/healthz", healthHandler)
+	httpsMux.Handle("/infer_schema", schemaInferenceHandler)
 	httpsMux.Handle("/", restHandler)
 
 	// compose both http and grpc into a single handler, that dispatches each request based on
@@ -88,7 +140,8 @@ func main() {
 	})
 
 	var plainServer = &http.Server{
-		Addr: fmt.Sprintf(":%s", *plainPort),
+		Handler: plainMux,
+		Addr:    fmt.Sprintf(":%s", *plainPort),
 	}
 	var httpsServer = &http.Server{
 		Handler: mixedHandler,
@@ -100,9 +153,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to start listener: %v", err)
 	}
+
+	// TODO: allow running without TLS, which means getting rid of the default value for `autoAcquireCert`
+
 	if *tls_cert != "" {
-		// Plain http will only serve the health check
-		plainServer.Handler = plainMux
 		if *tls_private_key == "" {
 			log.Fatalf("must supply --tls-private-key with --tls-certificate")
 		}
@@ -131,17 +185,19 @@ func main() {
 		tlsListener = tls.NewListener(tlsListener, certProvider.TLSConfig())
 		// Plain http will respond to ACME http-01 challenges and health checks.
 		plainServer.Handler = certProvider.acManager.HTTPHandler(plainMux)
-	} else {
-		log.Fatalf("server requires TLS: must supply either --tls-certificate --tls-private-key, or --auto-tls-cert --etcd-endpoint")
 	}
 
 	tasks.Queue("http server", func() error {
+		log.Printf("Started HTTP server")
 		return plainServer.ListenAndServe()
 	})
 
-	tasks.Queue("https server", func() error {
-		return httpsServer.Serve(tlsListener)
-	})
+	if *tls_cert != "" || *autoAcquireCert != "" {
+		tasks.Queue("https server", func() error {
+			log.Printf("Started HTTPS server")
+			return httpsServer.Serve(tlsListener)
+		})
+	}
 	tasks.GoRun()
 
 	log.Printf("Listening on %s\n", tlsListener.Addr().String())

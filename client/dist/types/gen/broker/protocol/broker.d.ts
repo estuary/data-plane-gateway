@@ -469,6 +469,8 @@ export interface ProtocolReadRequest {
     endOffset?: string;
 }
 /**
+* ReadResponse is the streamed response message of the broker Read RPC.
+Responses messages are of two types:
 * * "Metadata" messages, which conveys the journal Fragment addressed by the
    request which is ready to be read.
 * "Chunk" messages, which carry associated journal Fragment content bytes.

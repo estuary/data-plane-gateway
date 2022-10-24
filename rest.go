@@ -104,3 +104,11 @@ func (c *corsSettings) IsAllowed(origin string) bool {
 func (c *corsSettings) allowWildcard() bool {
 	return len(c.allowedOrigins) == 1 && c.allowedOrigins[0] == "*"
 }
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
+}
