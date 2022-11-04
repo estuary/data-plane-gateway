@@ -9,12 +9,14 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strings"
 	"time"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/jamiealquiza/envy"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	pb "go.gazette.dev/core/broker/protocol"
 	pc "go.gazette.dev/core/consumer/protocol"
 	"go.gazette.dev/core/task"
@@ -54,6 +56,7 @@ func main() {
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
 	)
+	grpc_prometheus.Register(grpcServer)
 
 	ctx := pb.WithDispatchDefault(context.Background())
 	var tasks = task.NewGroup(ctx)
@@ -117,7 +120,13 @@ func main() {
 	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
 
 	plainMux := http.NewServeMux()
+	plainMux.Handle("/metrics", promhttp.Handler())
 	plainMux.Handle("/healthz", healthHandler)
+	plainMux.HandleFunc("/debug/pprof/", pprof.Index)
+	plainMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	plainMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	plainMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	plainMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	plainMux.Handle("/infer_schema", schemaInferenceHandler)
 	plainMux.Handle("/", restHandler)
 
