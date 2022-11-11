@@ -3,8 +3,8 @@ package main
 import (
 	context "context"
 	"fmt"
-	"log"
 
+	log "github.com/sirupsen/logrus"
 	pc "go.gazette.dev/core/consumer/protocol"
 )
 
@@ -28,12 +28,14 @@ func NewShardAuthServer(ctx context.Context) *ShardAuthServer {
 }
 
 func newShardClient(ctx context.Context, addr string) (pc.ShardClient, error) {
-	log.Printf("connecting shard client to: %s", addr)
+	var entry = log.WithField("address", addr)
+	entry.Debug("starting to connect shard client")
 	conn, err := dialAddress(ctx, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to server: %w", err)
 	}
 
+	entry.Info("successfully connected shard client")
 	return pc.NewShardClient(conn), nil
 }
 

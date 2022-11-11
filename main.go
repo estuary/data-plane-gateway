@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -17,6 +16,7 @@ import (
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/jamiealquiza/envy"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
 	pb "go.gazette.dev/core/broker/protocol"
 	pc "go.gazette.dev/core/consumer/protocol"
 	"go.gazette.dev/core/task"
@@ -24,14 +24,23 @@ import (
 )
 
 var (
+	logLevel           = flag.String("log.level", "info", "Verbosity of logging")
 	brokerAddr         = flag.String("broker-address", "localhost:8080", "Target broker address")
 	consumerAddr       = flag.String("consumer-address", "localhost:9000", "Target consumer address")
 	inferenceAddr      = flag.String("inference-address", "localhost:9090", "Target schema inference service address")
 	corsOrigin         = flag.String("cors-origin", "*", "CORS Origin")
 	jwtVerificationKey = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
-	plainPort          = flag.String("plain-port", "28317", "Port for unencrypted communication")
-	tlsPort            = flag.String("port", "28318", "Service port for HTTPS and gRPC requests. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
-	zone               = flag.String("zone", "local", "Availability zone within which this process is running")
+	// Plain port is meant to be exposed to the public internet. It serves the REST endpoints, so that
+	// it's usable for local development without shenanigans for dealing with the self-signed cert.
+	// It also serves the ACME challenges for provisioning TLS certs. It does not serve gRPC.
+	plainPort = flag.String("plain-port", "28317", "Port for unencrypted communication")
+	// TLS port serves the REST endpoints and gRPC. The bread and butter, if you will.
+	tlsPort = flag.String("port", "28318", "Service port for HTTPS and gRPC requests. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
+	// We listen on 3 separate ports because the "plain-port" needs to be exposed to the public internet, and we
+	// don't want to serve metrics or debug endpoints to just anyone. This port serves metrics and debug
+	// endpoints only. It is not intended to ever be exposed to the public internet.
+	debugPort = flag.String("debug-port", "28316", "Port for serving metrics and debug endpoints")
+	zone      = flag.String("zone", "local", "Availability zone within which this process is running")
 
 	// Args for providing the tls certificate the old fashioned way
 	tls_cert        = flag.String("tls-certificate", "", "Path to the TLS certificate (.crt) to use.")
@@ -49,6 +58,12 @@ var corsConfig *corsSettings
 func main() {
 	flag.Parse()
 	envy.Parse("GATEWAY")
+	var lvl, err = log.ParseLevel(*logLevel)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse log level: '%s', %v", *logLevel, err))
+	}
+	log.SetLevel(lvl)
+	log.SetFormatter(&log.JSONFormatter{})
 	corsConfig = NewCorsSettings(*corsOrigin)
 
 	pb.RegisterGRPCDispatcher(*zone)
@@ -66,7 +81,7 @@ func main() {
 	pb.RegisterJournalServer(grpcServer, journalServer)
 	pc.RegisterShardServer(grpcServer, shardServer)
 
-	// Will be used with both http and https
+	// Will be used with all listeners.
 	var healthHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte("OK\n"))
 	})
@@ -120,13 +135,7 @@ func main() {
 	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
 
 	plainMux := http.NewServeMux()
-	plainMux.Handle("/metrics", promhttp.Handler())
 	plainMux.Handle("/healthz", healthHandler)
-	plainMux.HandleFunc("/debug/pprof/", pprof.Index)
-	plainMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	plainMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	plainMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	plainMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	plainMux.Handle("/infer_schema", schemaInferenceHandler)
 	plainMux.Handle("/", restHandler)
 
@@ -134,6 +143,15 @@ func main() {
 	httpsMux.Handle("/healthz", healthHandler)
 	httpsMux.Handle("/infer_schema", schemaInferenceHandler)
 	httpsMux.Handle("/", restHandler)
+
+	debugMux := http.NewServeMux()
+	debugMux.Handle("/metrics", promhttp.Handler())
+	debugMux.Handle("/healthz", healthHandler)
+	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
+	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	// compose both http and grpc into a single handler, that dispatches each request based on
 	// the content-type. It's important that we do this on a per-request basis instead of a
@@ -155,20 +173,23 @@ func main() {
 	var httpsServer = &http.Server{
 		Handler: mixedHandler,
 	}
+	var debugServer = &http.Server{
+		Handler: debugMux,
+		Addr:    fmt.Sprintf(":%s", *debugPort),
+	}
 
 	// This plain listener will be wrapped in one that does TLS termination. The implementation will
 	// depend on whether the TLS cert was provided directly versus us provisioning it automatically.
-	var tlsListener, err = net.Listen("tcp", fmt.Sprintf(":%s", *tlsPort))
+	tlsListener, err := net.Listen("tcp", fmt.Sprintf(":%s", *tlsPort))
 	if err != nil {
 		log.Fatalf("failed to start listener: %v", err)
 	}
-
-	// TODO: allow running without TLS, which means getting rid of the default value for `autoAcquireCert`
 
 	if *tls_cert != "" {
 		if *tls_private_key == "" {
 			log.Fatalf("must supply --tls-private-key with --tls-certificate")
 		}
+		log.Info("using TLS with provided certificate and key")
 
 		crt, err := tls.LoadX509KeyPair(*tls_cert, *tls_private_key)
 		if err != nil {
@@ -186,6 +207,7 @@ func main() {
 		if *autoRenewCertBefore < 0 {
 			log.Fatalf("--tls-renew-before-days must not be negative")
 		}
+		log.Info("using autocert to provision TLS certificates")
 		var certRenewBefore = 24 * time.Hour * time.Duration(*autoRenewCertBefore)
 		certProvider, err := NewCertProvider(*autoAcquireCert, *etcdEndpoint, *autoAcquireCertEmail, certRenewBefore)
 		if err != nil {
@@ -194,19 +216,24 @@ func main() {
 		tlsListener = tls.NewListener(tlsListener, certProvider.TLSConfig())
 		// Plain http will respond to ACME http-01 challenges and health checks.
 		plainServer.Handler = certProvider.acManager.HTTPHandler(plainMux)
+	} else {
+		panic("TLS is required in order to run data-plane-gateway. Missing TLS arguments")
 	}
 
 	tasks.Queue("http server", func() error {
+		log.WithField("port", plainPort).Info("started HTTP server")
 		log.Printf("Started HTTP server")
 		return plainServer.ListenAndServe()
 	})
+	tasks.Queue("https server", func() error {
+		log.WithField("port", tlsPort).Info("started HTTPS/GRPC server")
+		return httpsServer.Serve(tlsListener)
+	})
+	tasks.Queue("debug server", func() error {
+		log.WithField("port", debugPort).Info("started debug server")
+		return debugServer.ListenAndServe()
+	})
 
-	if *tls_cert != "" || *autoAcquireCert != "" {
-		tasks.Queue("https server", func() error {
-			log.Printf("Started HTTPS server")
-			return httpsServer.Serve(tlsListener)
-		})
-	}
 	tasks.GoRun()
 
 	log.Printf("Listening on %s\n", tlsListener.Addr().String())

@@ -3,8 +3,8 @@ package main
 import (
 	context "context"
 	"fmt"
-	"log"
 
+	log "github.com/sirupsen/logrus"
 	pb "go.gazette.dev/core/broker/protocol"
 )
 
@@ -87,7 +87,7 @@ func (s *JournalAuthServer) Read(readReq *pb.ReadRequest, readServer pb.Journal_
 		return err
 	}
 
-	return proxyStream(ctx, readServer, readClient, new(pb.ReadRequest), new(pb.ReadResponse))
+	return proxyStream(ctx, "/protocol.Journal/Read", readServer, readClient, new(pb.ReadRequest), new(pb.ReadResponse))
 }
 
 // We're currently only implementing the read-only RPCs for protocol.JournalServer.
