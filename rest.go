@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"log"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gogo/gateway"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	log "github.com/sirupsen/logrus"
 	"github.com/urfave/negroni"
 	_ "go.gazette.dev/core/broker/protocol"
 	"google.golang.org/grpc"
@@ -42,9 +43,12 @@ func NewRestServer(ctx context.Context, gatewayAddr string) http.Handler {
 	)
 
 	// Since we dial ourselves on the loopback address, the hostname won't match the TLS cert.
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-		InsecureSkipVerify: true,
-	}))}
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			InsecureSkipVerify: true,
+		})),
+		grpc.WithChainUnaryInterceptor(grpc.UnaryClientInterceptor(grpc.UnaryClientInterceptor(logRestDelegateRPC))),
+	}
 
 	err = bgw.RegisterJournalHandlerFromEndpoint(ctx, mux, gatewayAddr, opts)
 	if err != nil {
@@ -61,6 +65,19 @@ func NewRestServer(ctx context.Context, gatewayAddr string) http.Handler {
 	n.UseHandler(mux)
 
 	return n
+}
+
+func logRestDelegateRPC(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	var start = time.Now().UTC()
+	// "method" is the gRPC term, which actually means "path" in HTTP terms.
+	log.WithField("method", method).Trace("starting REST delegate RPC")
+	var err = invoker(ctx, method, req, reply, cc, opts...)
+	log.WithFields(log.Fields{
+		"method":     method,
+		"timeMillis": time.Now().UTC().Sub(start).Milliseconds,
+		"error":      err,
+	}).Debug("finished REST delegate gRPC")
+	return err
 }
 
 func cors(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
