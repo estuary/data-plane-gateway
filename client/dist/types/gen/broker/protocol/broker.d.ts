@@ -1,7 +1,7 @@
 /**
-* Change defines an insertion, update, or deletion to be applied to the set
-of JournalSpecs. Exactly one of |upsert| or |delete| must be set.
-*/
+ * Change defines an insertion, update, or deletion to be applied to the set
+ * of JournalSpecs. Exactly one of |upsert| or |delete| must be set.
+ */
 export interface ApplyRequestChange {
     /**
      * Expected ModRevision of the current JournalSpec. If the Journal is being
@@ -17,9 +17,7 @@ export interface ApplyRequestChange {
     /** Journal to be deleted. expect_mod_revision must not be zero. */
     delete?: string;
 }
-/**
- * Fragments of the Response.
- */
+/** Fragments of the Response. */
 export interface FragmentsResponseFragment {
     /**
      * Fragment is a content-addressed description of a contiguous Journal span,
@@ -35,15 +33,15 @@ export interface FragmentsResponseFragment {
     signedUrl?: string;
 }
 /**
-* Etcd represents the effective Etcd MVCC state under which a Gazette broker
-is operating in its processing of requests and responses. Its inclusion
-allows brokers to reason about relative "happened before" Revision ordering
-of apparent routing conflicts in proxied or replicated requests, as well
-as enabling sanity checks over equality of Etcd ClusterId (and precluding,
-for example, split-brain scenarios where different brokers are backed by
-different Etcd clusters). Etcd is kept in sync with
-etcdserverpb.ResponseHeader.
-*/
+ * Etcd represents the effective Etcd MVCC state under which a Gazette broker
+ * is operating in its processing of requests and responses. Its inclusion
+ * allows brokers to reason about relative "happened before" Revision ordering
+ * of apparent routing conflicts in proxied or replicated requests, as well
+ * as enabling sanity checks over equality of Etcd ClusterId (and precluding,
+ * for example, split-brain scenarios where different brokers are backed by
+ * different Etcd clusters). Etcd is kept in sync with
+ * etcdserverpb.ResponseHeader.
+ */
 export interface HeaderEtcd {
     /**
      * cluster_id is the ID of the cluster.
@@ -67,9 +65,7 @@ export interface HeaderEtcd {
      */
     raftTerm?: string;
 }
-/**
- * Journals of the response.
- */
+/** Journals of the response. */
 export interface ListResponseJournal {
     /** JournalSpec describes a Journal and its configuration. */
     spec?: ProtocolJournalSpec;
@@ -81,9 +77,7 @@ export interface ListResponseJournal {
     /** Route of the journal, including endpoints. */
     route?: ProtocolRoute;
 }
-/**
- * ID composes a zone and a suffix to uniquely identify a ProcessSpec.
- */
+/** ID composes a zone and a suffix to uniquely identify a ProcessSpec. */
 export interface ProcessSpecID {
     /**
      * "Zone" in which the process is running. Zones may be AWS, Azure, or
@@ -106,9 +100,7 @@ export interface ProtobufAny {
     /** @format byte */
     value?: string;
 }
-/**
- * AppendResponse is the unary response message of the broker Append RPC.
- */
+/** AppendResponse is the unary response message of the broker Append RPC. */
 export interface ProtocolAppendResponse {
     /** Status of the Append RPC. */
     status?: ProtocolStatus;
@@ -132,9 +124,7 @@ export interface ProtocolAppendResponse {
      */
     delayedChunks?: string;
 }
-/**
- * ApplyResponse is the unary response message of the broker Apply RPC.
- */
+/** ApplyResponse is the unary response message of the broker Apply RPC. */
 export interface ProtocolApplyResponse {
     /** Status of the Apply RPC. */
     status?: ProtocolStatus;
@@ -142,35 +132,36 @@ export interface ProtocolApplyResponse {
     header?: ProtocolHeader;
 }
 /**
-* CompressionCode defines codecs known to Gazette.
-
- - INVALID: INVALID is the zero-valued CompressionCodec, and is not a valid codec.
- - NONE: NONE encodes Fragments without any applied compression, with default suffix
-".raw".
- - GZIP: GZIP encodes Fragments using the Gzip library, with default suffix ".gz".
- - ZSTANDARD: ZSTANDARD encodes Fragments using the ZStandard library, with default
-suffix ".zst".
- - SNAPPY: SNAPPY encodes Fragments using the Snappy library, with default suffix
-".sz".
- - GZIP_OFFLOAD_DECOMPRESSION: GZIP_OFFLOAD_DECOMPRESSION is the GZIP codec with additional behavior
-around reads and writes to remote Fragment stores, designed to offload
-the work of decompression onto compatible stores. Specifically:
- * Fragments are written with a "Content-Encoding: gzip" header.
- * Client read requests are made with "Accept-Encoding: identity".
-This can be helpful in contexts where reader IO bandwidth to the storage
-API is unconstrained, as the cost of decompression is offloaded to the
-store and CPU-intensive batch readers may receive a parallelism benefit.
-While this codec may provide substantial read-time performance
-improvements, it is an advanced configuration and the "Content-Encoding"
-header handling can be subtle and sometimes confusing. It uses the default
-suffix ".gzod".
-*/
+ * CompressionCode defines codecs known to Gazette.
+ *
+ *  - INVALID: INVALID is the zero-valued CompressionCodec, and is not a valid codec.
+ *  - NONE: NONE encodes Fragments without any applied compression, with default suffix
+ * ".raw".
+ *  - GZIP: GZIP encodes Fragments using the Gzip library, with default suffix ".gz".
+ *  - ZSTANDARD: ZSTANDARD encodes Fragments using the ZStandard library, with default
+ * suffix ".zst".
+ *  - SNAPPY: SNAPPY encodes Fragments using the Snappy library, with default suffix
+ * ".sz".
+ *  - GZIP_OFFLOAD_DECOMPRESSION: GZIP_OFFLOAD_DECOMPRESSION is the GZIP codec with additional behavior
+ * around reads and writes to remote Fragment stores, designed to offload
+ * the work of decompression onto compatible stores. Specifically:
+ *  * Fragments are written with a "Content-Encoding: gzip" header.
+ *  * Client read requests are made with "Accept-Encoding: identity".
+ * This can be helpful in contexts where reader IO bandwidth to the storage
+ * API is unconstrained, as the cost of decompression is offloaded to the
+ * store and CPU-intensive batch readers may receive a parallelism benefit.
+ * While this codec may provide substantial read-time performance
+ * improvements, it is an advanced configuration and the "Content-Encoding"
+ * header handling can be subtle and sometimes confusing. It uses the default
+ * suffix ".gzod".
+ * @default "INVALID"
+ */
 export declare type ProtocolCompressionCodec = "INVALID" | "NONE" | "GZIP" | "ZSTANDARD" | "SNAPPY" | "GZIP_OFFLOAD_DECOMPRESSION";
 /**
-* Fragment is a content-addressed description of a contiguous Journal span,
-defined by the [begin, end) offset range covered by the Fragment and the
-SHA1 sum of the corresponding Journal content.
-*/
+ * Fragment is a content-addressed description of a contiguous Journal span,
+ * defined by the [begin, end) offset range covered by the Fragment and the
+ * SHA1 sum of the corresponding Journal content.
+ */
 export interface ProtocolFragment {
     /** Journal of the Fragment. */
     journal?: string;
@@ -205,9 +196,9 @@ export interface ProtocolFragment {
     pathPostfix?: string;
 }
 /**
-* FragmentsResponse is the unary response message of the broker ListFragments
-RPC.
-*/
+ * FragmentsResponse is the unary response message of the broker ListFragments
+ * RPC.
+ */
 export interface ProtocolFragmentsResponse {
     /** Status of the Apply RPC. */
     status?: ProtocolStatus;
@@ -223,9 +214,9 @@ export interface ProtocolFragmentsResponse {
     nextPageToken?: string;
 }
 /**
-* Header captures metadata such as the process responsible for processing
-an RPC, and its effective Etcd state.
-*/
+ * Header captures metadata such as the process responsible for processing
+ * an RPC, and its effective Etcd state.
+ */
 export interface ProtocolHeader {
     /**
      * ID of the process responsible for request processing. May be empty iff
@@ -250,9 +241,7 @@ export interface ProtocolHeader {
      */
     etcd?: HeaderEtcd;
 }
-/**
- * JournalSpec describes a Journal and its configuration.
- */
+/** JournalSpec describes a Journal and its configuration. */
 export interface ProtocolJournalSpec {
     /** Name of the Journal. */
     name?: string;
@@ -289,9 +278,9 @@ export interface ProtocolJournalSpec {
     maxAppendRate?: string;
 }
 /**
-* Fragment is JournalSpec configuration which pertains to the creation,
-persistence, and indexing of the Journal's Fragments.
-*/
+ * Fragment is JournalSpec configuration which pertains to the creation,
+ * persistence, and indexing of the Journal's Fragments.
+ */
 export interface ProtocolJournalSpecFragment {
     /**
      * Target content length of each Fragment. In normal operation after
@@ -349,6 +338,7 @@ export interface ProtocolJournalSpecFragment {
      * fragment on the hour, every hour, even if it has not yet reached its
      * target length. A batch work-flow running at 5 minutes past the hour is
      * then reasonably assured of seeing all events from the past hour.
+     *
      * See also "gazctl journals fragments --help" for more discussion.
      */
     flushInterval?: string;
@@ -369,18 +359,16 @@ export interface ProtocolJournalSpecFragment {
     pathPostfixTemplate?: string;
 }
 /**
-* Label defines a key & value pair which can be attached to entities like
-JournalSpecs and BrokerSpecs. Labels may be used to provide identifying
-attributes which do not directly imply semantics to the core system, but
-are meaningful to users or for higher-level Gazette tools.
-*/
+ * Label defines a key & value pair which can be attached to entities like
+ * JournalSpecs and BrokerSpecs. Labels may be used to provide identifying
+ * attributes which do not directly imply semantics to the core system, but
+ * are meaningful to users or for higher-level Gazette tools.
+ */
 export interface ProtocolLabel {
     name?: string;
     value?: string;
 }
-/**
- * LabelSelector defines a filter over LabelSets.
- */
+/** LabelSelector defines a filter over LabelSets. */
 export interface ProtocolLabelSelector {
     /**
      * Include is Labels which must be matched for a LabelSet to be selected. If
@@ -395,16 +383,12 @@ export interface ProtocolLabelSelector {
      */
     exclude?: ProtocolLabelSet;
 }
-/**
- * LabelSet is a collection of labels and their values.
- */
+/** LabelSet is a collection of labels and their values. */
 export interface ProtocolLabelSet {
     /** Labels of the set. Instances must be unique and sorted over (Name, Value). */
     labels?: ProtocolLabel[];
 }
-/**
- * ListRequest is the unary request message of the broker List RPC.
- */
+/** ListRequest is the unary request message of the broker List RPC. */
 export interface ProtocolListRequest {
     /**
      * Selector optionally refines the set of journals which will be enumerated.
@@ -418,9 +402,7 @@ export interface ProtocolListRequest {
      */
     selector?: ProtocolLabelSelector;
 }
-/**
- * ListResponse is the unary response message of the broker List RPC.
- */
+/** ListResponse is the unary response message of the broker List RPC. */
 export interface ProtocolListResponse {
     /** Status of the List RPC. */
     status?: ProtocolStatus;
@@ -428,9 +410,7 @@ export interface ProtocolListResponse {
     header?: ProtocolHeader;
     journals?: ListResponseJournal[];
 }
-/**
- * ReadRequest is the unary request message of the broker Read RPC.
- */
+/** ReadRequest is the unary request message of the broker Read RPC. */
 export interface ProtocolReadRequest {
     /** Header is attached by a proxying broker peer. */
     header?: ProtocolHeader;
@@ -469,19 +449,19 @@ export interface ProtocolReadRequest {
     endOffset?: string;
 }
 /**
-* ReadResponse is the streamed response message of the broker Read RPC.
-Responses messages are of two types:
-* * "Metadata" messages, which conveys the journal Fragment addressed by the
-   request which is ready to be read.
-* "Chunk" messages, which carry associated journal Fragment content bytes.
-
-A metadata message specifying a Fragment always precedes all "chunks" of the
-Fragment's content. Response streams may be very long lived, having many
-metadata and accompanying chunk messages. The reader may also block for long
-periods of time awaiting the next metadata message (eg, if the next offset
-hasn't yet committed). However once a metadata message is read, the reader
-is assured that its associated chunk messages are immediately forthcoming.
-*/
+ * ReadResponse is the streamed response message of the broker Read RPC.
+ * Responses messages are of two types:
+ * * "Metadata" messages, which conveys the journal Fragment addressed by the
+ *    request which is ready to be read.
+ * * "Chunk" messages, which carry associated journal Fragment content bytes.
+ *
+ * A metadata message specifying a Fragment always precedes all "chunks" of the
+ * Fragment's content. Response streams may be very long lived, having many
+ * metadata and accompanying chunk messages. The reader may also block for long
+ * periods of time awaiting the next metadata message (eg, if the next offset
+ * hasn't yet committed). However once a metadata message is read, the reader
+ * is assured that its associated chunk messages are immediately forthcoming.
+ */
 export interface ProtocolReadResponse {
     /** Status of the Read RPC. */
     status?: ProtocolStatus;
@@ -517,10 +497,10 @@ export interface ProtocolReadResponse {
     content?: string;
 }
 /**
-* ReplicateResponse is the streamed response message of the broker's internal
-Replicate RPC. Each message is a 1:1 response to a previously read "proposal"
-ReplicateRequest with |acknowledge| set.
-*/
+ * ReplicateResponse is the streamed response message of the broker's internal
+ * Replicate RPC. Each message is a 1:1 response to a previously read "proposal"
+ * ReplicateRequest with |acknowledge| set.
+ */
 export interface ProtocolReplicateResponse {
     /** Status of the Replicate RPC. */
     status?: ProtocolStatus;
@@ -541,9 +521,7 @@ export interface ProtocolReplicateResponse {
      */
     registers?: ProtocolLabelSet;
 }
-/**
- * Route captures the current topology of an item and the processes serving it.
- */
+/** Route captures the current topology of an item and the processes serving it. */
 export interface ProtocolRoute {
     /** Members of the Route, ordered on ascending ProcessSpec.ID (zone, suffix). */
     members?: ProcessSpecID[];
@@ -559,9 +537,7 @@ export interface ProtocolRoute {
      */
     endpoints?: string[];
 }
-/**
- * SHA1Sum is a 160-bit SHA1 digest.
- */
+/** SHA1Sum is a 160-bit SHA1 digest. */
 export interface ProtocolSHA1Sum {
     /** @format uint64 */
     part1?: string;
@@ -571,35 +547,36 @@ export interface ProtocolSHA1Sum {
     part3?: number;
 }
 /**
-* Status is a response status code, used universally across Gazette RPC APIs.
-
- - JOURNAL_NOT_FOUND: The named journal does not exist.
- - NO_JOURNAL_PRIMARY_BROKER: There is no current primary broker for the journal. This is a temporary
-condition which should quickly resolve, assuming sufficient broker
-capacity.
- - NOT_JOURNAL_PRIMARY_BROKER: The present broker is not the assigned primary broker for the journal.
- - NOT_JOURNAL_BROKER: The present broker is not an assigned broker for the journal.
- - INSUFFICIENT_JOURNAL_BROKERS: There are an insufficient number of assigned brokers for the journal
-to meet its required replication.
- - OFFSET_NOT_YET_AVAILABLE: The requested offset is not yet available. This indicates either that the
-offset has not yet been written, or that the broker is not yet aware of a
-written fragment covering the offset. Returned only by non-blocking reads.
- - WRONG_ROUTE: The peer disagrees with the Route accompanying a ReplicateRequest.
- - PROPOSAL_MISMATCH: The peer disagrees with the proposal accompanying a ReplicateRequest.
- - ETCD_TRANSACTION_FAILED: The Etcd transaction failed. Returned by Update RPC when an
-expect_mod_revision of the UpdateRequest differs from the current
-ModRevision of the JournalSpec within the store.
- - NOT_ALLOWED: A disallowed journal access was attempted (eg, a write where the
-journal disables writes, or read where journals disable reads).
- - WRONG_APPEND_OFFSET: The Append is refused because its requested offset is not equal
-to the furthest written offset of the journal.
- - INDEX_HAS_GREATER_OFFSET: The Append is refused because the replication pipeline tracks a smaller
-journal offset than that of the remote fragment index. This indicates
-that journal replication consistency has been lost in the past, due to
-too many broker or Etcd failures.
- - REGISTER_MISMATCH: The Append is refused because a registers selector was provided with the
-request, but it was not matched by current register values of the journal.
-*/
+ * Status is a response status code, used universally across Gazette RPC APIs.
+ *
+ *  - JOURNAL_NOT_FOUND: The named journal does not exist.
+ *  - NO_JOURNAL_PRIMARY_BROKER: There is no current primary broker for the journal. This is a temporary
+ * condition which should quickly resolve, assuming sufficient broker
+ * capacity.
+ *  - NOT_JOURNAL_PRIMARY_BROKER: The present broker is not the assigned primary broker for the journal.
+ *  - NOT_JOURNAL_BROKER: The present broker is not an assigned broker for the journal.
+ *  - INSUFFICIENT_JOURNAL_BROKERS: There are an insufficient number of assigned brokers for the journal
+ * to meet its required replication.
+ *  - OFFSET_NOT_YET_AVAILABLE: The requested offset is not yet available. This indicates either that the
+ * offset has not yet been written, or that the broker is not yet aware of a
+ * written fragment covering the offset. Returned only by non-blocking reads.
+ *  - WRONG_ROUTE: The peer disagrees with the Route accompanying a ReplicateRequest.
+ *  - PROPOSAL_MISMATCH: The peer disagrees with the proposal accompanying a ReplicateRequest.
+ *  - ETCD_TRANSACTION_FAILED: The Etcd transaction failed. Returned by Update RPC when an
+ * expect_mod_revision of the UpdateRequest differs from the current
+ * ModRevision of the JournalSpec within the store.
+ *  - NOT_ALLOWED: A disallowed journal access was attempted (eg, a write where the
+ * journal disables writes, or read where journals disable reads).
+ *  - WRONG_APPEND_OFFSET: The Append is refused because its requested offset is not equal
+ * to the furthest written offset of the journal.
+ *  - INDEX_HAS_GREATER_OFFSET: The Append is refused because the replication pipeline tracks a smaller
+ * journal offset than that of the remote fragment index. This indicates
+ * that journal replication consistency has been lost in the past, due to
+ * too many broker or Etcd failures.
+ *  - REGISTER_MISMATCH: The Append is refused because a registers selector was provided with the
+ * request, but it was not matched by current register values of the journal.
+ * @default "OK"
+ */
 export declare type ProtocolStatus = "OK" | "JOURNAL_NOT_FOUND" | "NO_JOURNAL_PRIMARY_BROKER" | "NOT_JOURNAL_PRIMARY_BROKER" | "NOT_JOURNAL_BROKER" | "INSUFFICIENT_JOURNAL_BROKERS" | "OFFSET_NOT_YET_AVAILABLE" | "WRONG_ROUTE" | "PROPOSAL_MISMATCH" | "ETCD_TRANSACTION_FAILED" | "NOT_ALLOWED" | "WRONG_APPEND_OFFSET" | "INDEX_HAS_GREATER_OFFSET" | "REGISTER_MISMATCH";
 export interface RuntimeError {
     error?: string;
