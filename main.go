@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/jamiealquiza/envy"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -134,17 +135,19 @@ func main() {
 
 	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
 
-	plainMux := http.NewServeMux()
+	plainMux := mux.NewRouter()
 	plainMux.Handle("/healthz", healthHandler)
 	plainMux.Handle("/infer_schema", schemaInferenceHandler)
-	plainMux.Handle("/", restHandler)
+	plainMux.HandleFunc(`/ingest/{rest:[a-zA-Z0-9_\-\/]+}`, ingestHandler).Methods("POST")
+	plainMux.Handle(`/{rest:[a-zA-Z0-9_\-\/]+}`, restHandler)
 
-	httpsMux := http.NewServeMux()
+	httpsMux := mux.NewRouter()
 	httpsMux.Handle("/healthz", healthHandler)
 	httpsMux.Handle("/infer_schema", schemaInferenceHandler)
-	httpsMux.Handle("/", restHandler)
+	httpsMux.HandleFunc(`/ingest/{rest:[a-zA-Z0-9_\-\/]+}`, ingestHandler).Methods("POST")
+	httpsMux.Handle(`/{rest:[a-zA-Z0-9_\-\/]+}`, restHandler)
 
-	debugMux := http.NewServeMux()
+	debugMux := mux.NewRouter()
 	debugMux.Handle("/metrics", promhttp.Handler())
 	debugMux.Handle("/healthz", healthHandler)
 	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
