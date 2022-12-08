@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -25,7 +24,6 @@ type pushRpc struct {
 }
 
 func newPushRpc(ctx context.Context, serverAddr string) (*pushRpc, error) {
-	log.Info("Connecting to: ", serverAddr)
 	if conn, err := grpc.Dial(serverAddr, grpc.WithInsecure()); err != nil {
 		return nil, fmt.Errorf("fail to dial: %w", err)
 	} else if rpc, err := capture.NewRuntimeClient(conn).Push(ctx); err != nil {
@@ -82,7 +80,7 @@ func (p *pushRpc) SendDocuments(reader io.Reader, bindingNum int, batchSize int)
 					DocsJson: docs,
 				},
 			}); err != nil {
-				return fmt.Errorf("send documentszzz: %w", err)
+				return fmt.Errorf("send documents: %w", err)
 			} else if err := p.Checkpoint(); err != nil {
 				return fmt.Errorf("checkpoint: %w", err)
 			} else if err := p.Acknowledge(); err != nil {
@@ -97,8 +95,6 @@ func (p *pushRpc) SendDocuments(reader io.Reader, bindingNum int, batchSize int)
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("scan input: %w", err)
 	}
-
-	log.WithField("docs", len(docs)).Info("Done!")
 
 	if len(docs) == 0 {
 		return nil
@@ -133,11 +129,6 @@ func (p *pushRpc) Close() {
 	p.conn.Close()
 }
 
-func logAndExit(err error) {
-	log.Fatalf("execution failed: %v", err)
-	os.Exit(1)
-}
-
 type IngestCaptureBinding struct {
 	Name string `json:"name"`
 }
@@ -158,7 +149,6 @@ var ingestHandler = http.HandlerFunc(func(writer http.ResponseWriter, req *http.
 	var capture_name = strings.Join(path_components[:len(path_components)-1], "/")
 
 	log := log.WithField("capture_name", capture_name).WithField("binding_name", binding_name)
-	log.Info("Running ingest")
 
 	var ctx, cancel = context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
