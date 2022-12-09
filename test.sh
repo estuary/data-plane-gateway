@@ -73,7 +73,6 @@ log "TESTDIR setup: ${TESTDIR}"
 # --unix-sockets to create UDS socket files in TESTDIR in well-known locations.
 ${FLOW_BIN} temp-data-plane \
   --log.level info \
-  --poll \
   --tempdir=${TESTDIR} \
   --unix-sockets \
   --sigterm \
