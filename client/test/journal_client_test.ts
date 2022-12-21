@@ -135,7 +135,7 @@ snapshotTest("JournalClient.read content test", async ({ assertSnapshot }) => {
   const docStream = parseJournalDocuments(stream!);
   const results = await readStreamToEnd(docStream);
 
-  let filtered_results = results.filter(r=>!r._meta.ack)
+  let filtered_results = results.filter(r=>!(r._meta as any).ack)
 
   const masks = ["/*/_meta/uuid"];
   assertSnapshot(filtered_results, masks);
