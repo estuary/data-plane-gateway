@@ -35,34 +35,6 @@
       count: 5,
       message: 'Hello #5',
     },
-    {
-      _meta: {
-        uuid: '[MASKED string]',
-      },
-      count: 6,
-      message: 'Hello #6',
-    },
-    {
-      _meta: {
-        uuid: '[MASKED string]',
-      },
-      count: 7,
-      message: 'Hello #7',
-    },
-    {
-      _meta: {
-        uuid: '[MASKED string]',
-      },
-      count: 8,
-      message: 'Hello #8',
-    },
-    {
-      _meta: {
-        uuid: '[MASKED string]',
-      },
-      count: 9,
-      message: 'Hello #9',
-    },
   ],
   'JournalClient.read test': [
     {
