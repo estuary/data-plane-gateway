@@ -2,12 +2,6 @@
   'JournalClient.read content test': [
     {
       _meta: {
-        ack: true,
-        uuid: '[MASKED string]',
-      },
-    },
-    {
-      _meta: {
         uuid: '[MASKED string]',
       },
       count: 1,
