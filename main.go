@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -86,53 +85,8 @@ func main() {
 		w.Write([]byte("OK\n"))
 	})
 
-	// Will be used with both http and https
-	// Inspired partially by https://gist.github.com/yowu/f7dc34bd4736a65ff28d
-	var schemaInferenceHandler = http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
-		// Do auth
-		// Pull JWT from authz header
-		// See auth.go:authorized()
-		// decodeJWT(that bearer token) -> AuthorizedClaims
-		claims, err := authorized_req(req)
-		if err != nil {
-			http.Error(writer, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		collection_name := req.URL.Query().Get("collection")
-		authorization_error := enforcePrefix(claims, collection_name)
-
-		// enforcePrefix(claims, collection_name)
-		// collection_name comes from actual inference request
-		if authorization_error != nil {
-			http.Error(writer, authorization_error.Error(), http.StatusForbidden)
-			return
-		}
-
-		// TODO: rename the argument to `?collection=...` in the schema inference service, then get rid of this:
-		args := req.URL.Query()
-		args.Set("collection_name", args.Get("collection"))
-		args.Del("collection")
-
-		// Call inference
-		inference_response, inference_error := http.Get(fmt.Sprintf("http://%s/infer_schema?%s", *inferenceAddr, args.Encode()))
-
-		if inference_error != nil {
-			// An error is returned if there were too many redirects or if there was an HTTP protocol error.
-			// A non-2xx response doesn't cause an error.
-			http.Error(writer, inference_error.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		defer inference_response.Body.Close()
-		// Return result
-
-		copyHeader(writer.Header(), inference_response.Header)
-		writer.WriteHeader(inference_response.StatusCode)
-		io.Copy(writer, inference_response.Body)
-	})
-
 	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
+	schemaInferenceHandler := NewSchemaInferenceServer(ctx)
 
 	plainMux := http.NewServeMux()
 	plainMux.Handle("/healthz", healthHandler)
