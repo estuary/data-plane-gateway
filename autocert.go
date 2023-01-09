@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/ReneKroon/ttlcache"
@@ -12,7 +13,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-func NewCertProvider(hostname string, etcdUrl string, certificateEmail string, certRenewBefore time.Duration) (*CertProvider, error) {
+func NewCertProvider(dpgServiceHostname, containerSubdomain, etcdUrl, certificateEmail string, certRenewBefore time.Duration) (*CertProvider, error) {
 	var etcdClient, err = etcd.NewFromURL(etcdUrl)
 	if err != nil {
 		return nil, fmt.Errorf("creating etcd client: %w", err)
@@ -20,12 +21,18 @@ func NewCertProvider(hostname string, etcdUrl string, certificateEmail string, c
 	if err = etcdClient.Sync(context.Background()); err != nil {
 		return nil, fmt.Errorf("syncing etcd members: %w", err)
 	}
+	var hostPolicy = func(ctx context.Context, host string) error {
+		if host == dpgServiceHostname || strings.HasSuffix(host, containerSubdomain) {
+			return nil
+		}
+		return fmt.Errorf("invalid hostname: '%s'", host)
+	}
 	return &CertProvider{
-		hostname: hostname,
+		hostname: dpgServiceHostname,
 		acManager: autocert.Manager{
 			Prompt:      autocert.AcceptTOS,
-			Cache:       newEtcdCache(hostname, etcdClient),
-			HostPolicy:  autocert.HostWhitelist(hostname),
+			Cache:       newEtcdCache(dpgServiceHostname, etcdClient),
+			HostPolicy:  hostPolicy,
 			Email:       certificateEmail,
 			RenewBefore: certRenewBefore,
 		},
@@ -44,7 +51,10 @@ func (p *CertProvider) TLSConfig() *tls.Config {
 	return &tls.Config{
 		// We don't use acManager.TLSConfig() because that function adds the ACME challenge protocol
 		// to NextProtos, and that challenge method won't work for us.
-		NextProtos:     []string{"h2", "http/1.1"},
+		// TODO: I removed http/1.1 support because supporting it would be a PITA.
+		// There's no http/1.1 equivalent to http2.Server.ServeConn, which is how we currently
+		// handle connections.
+		NextProtos:     []string{"h2"},
 		GetCertificate: p.GetCertificate,
 	}
 }
@@ -66,7 +76,7 @@ func (p *CertProvider) TLSConfig() *tls.Config {
 // our (in practice, static) IP address, so we patch in our configured hostname onto every
 // ClientHello before handing it off to autocert.
 func (p *CertProvider) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	hello.ServerName = p.hostname
+	// TODO: update comment, as we are no longer overriding the hostname
 	return p.acManager.GetCertificate(hello)
 }
 

@@ -20,6 +20,7 @@ import (
 	pb "go.gazette.dev/core/broker/protocol"
 	pc "go.gazette.dev/core/consumer/protocol"
 	"go.gazette.dev/core/task"
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 )
 
@@ -42,15 +43,11 @@ var (
 	debugPort = flag.String("debug-port", "28316", "Port for serving metrics and debug endpoints")
 	zone      = flag.String("zone", "local", "Availability zone within which this process is running")
 
-	// Args for providing the tls certificate the old fashioned way
+	// Args for providing the tls certificate
 	tls_cert        = flag.String("tls-certificate", "", "Path to the TLS certificate (.crt) to use.")
 	tls_private_key = flag.String("tls-private-key", "", "The private key for the TLS certificate")
 
-	// Args that are required for automatically acquiring TLS certificates
-	autoAcquireCert      = flag.String("auto-tls-cert", "", "Automatically acquire TLS certificate from Let's Encrypt for the given domain using the ACME protocol")
-	etcdEndpoint         = flag.String("etcd-endpoint", "localhost:2379", "ETCD URL to connect to for managing TLS certificates. Only used when auto-tls-cert argument is provided")
-	autoAcquireCertEmail = flag.String("tls-cert-email", "", "email address to associate with the automatically acquired TLS certificate")
-	autoRenewCertBefore  = flag.Int("tls-renew-before-days", 30, "attempt to renew the certificate this many days before it expires")
+	connectors_domain_suffix = flag.String("connectors-domain-suffix", "", "The domain suffix for connector containers")
 )
 
 var corsConfig *corsSettings
@@ -170,9 +167,6 @@ func main() {
 		Handler: plainMux,
 		Addr:    fmt.Sprintf(":%s", *plainPort),
 	}
-	var httpsServer = &http.Server{
-		Handler: mixedHandler,
-	}
 	var debugServer = &http.Server{
 		Handler: debugMux,
 		Addr:    fmt.Sprintf(":%s", *debugPort),
@@ -180,11 +174,12 @@ func main() {
 
 	// This plain listener will be wrapped in one that does TLS termination. The implementation will
 	// depend on whether the TLS cert was provided directly versus us provisioning it automatically.
-	tlsListener, err := net.Listen("tcp", fmt.Sprintf(":%s", *tlsPort))
+	baseTlsListener, err := net.Listen("tcp", fmt.Sprintf(":%s", *tlsPort))
 	if err != nil {
 		log.Fatalf("failed to start listener: %v", err)
 	}
 
+	var baseTlsConfig *tls.Config
 	if *tls_cert != "" {
 		if *tls_private_key == "" {
 			log.Fatalf("must supply --tls-private-key with --tls-certificate")
@@ -196,28 +191,26 @@ func main() {
 			log.Fatalf("failed to load tls certificate: %v", err)
 		}
 
-		var config = tls.Config{
+		baseTlsConfig = &tls.Config{
 			Certificates: []tls.Certificate{crt},
 			// NextProtos is someone's clever name for the list of supported ALPN protocols.
 			// We need to explicitly configure support for HTTP2 here, or else it won't be offered.
-			NextProtos: []string{"h2", "http/1.1"},
+			NextProtos: []string{"h2"},
 		}
-		tlsListener = tls.NewListener(tlsListener, &config)
-	} else if *autoAcquireCert != "" {
-		if *autoRenewCertBefore < 0 {
-			log.Fatalf("--tls-renew-before-days must not be negative")
-		}
-		log.Info("using autocert to provision TLS certificates")
-		var certRenewBefore = 24 * time.Hour * time.Duration(*autoRenewCertBefore)
-		certProvider, err := NewCertProvider(*autoAcquireCert, *etcdEndpoint, *autoAcquireCertEmail, certRenewBefore)
-		if err != nil {
-			log.Fatalf("initializing autocert: %v", err)
-		}
-		tlsListener = tls.NewListener(tlsListener, certProvider.TLSConfig())
-		// Plain http will respond to ACME http-01 challenges and health checks.
-		plainServer.Handler = certProvider.acManager.HTTPHandler(plainMux)
 	} else {
 		panic("TLS is required in order to run data-plane-gateway. Missing TLS arguments")
+	}
+
+	var tlsConfig = &tls.Config{
+		GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+			if strings.HasSuffix(hello.ServerName, *connectors_domain_suffix) {
+				// TODO: determine shard from server name
+				// TODO: fetch ports from shard
+				var config = baseTlsConfig.Clone()
+				// TODO: determine alpn protocols
+				return config, nil
+			}
+		},
 	}
 
 	tasks.Queue("http server", func() error {
@@ -227,7 +220,26 @@ func main() {
 	})
 	tasks.Queue("https server", func() error {
 		log.WithField("port", tlsPort).Info("started HTTPS/GRPC server")
-		return httpsServer.Serve(tlsListener)
+		var h2Server = http2.Server{}
+		var h2ServerOpts = http2.ServeConnOpts{
+			Context: ctx,
+			Handler: mixedHandler,
+		}
+		for {
+			var conn, cErr = baseTlsListener.Accept()
+			if cErr != nil {
+				log.WithField("error", cErr).Error("failed to accept tls connection")
+				return cErr
+			}
+			var state = conn.(*tls.Conn).ConnectionState()
+			if strings.HasSuffix(state.ServerName, ".localhost") {
+				// proxy to connector container
+			} else {
+				// TODO: bail if alpn protocol isn't h2 or empty
+				h2Server.ServeConn(conn, &h2ServerOpts)
+			}
+		}
+		return httpsServer.Serve(baseTlsListener)
 	})
 	tasks.Queue("debug server", func() error {
 		log.WithField("port", debugPort).Info("started debug server")
@@ -236,7 +248,7 @@ func main() {
 
 	tasks.GoRun()
 
-	log.Printf("Listening on %s\n", tlsListener.Addr().String())
+	log.Printf("Listening on %s\n", baseTlsListener.Addr().String())
 
 	err = tasks.Wait()
 	if err != nil {
