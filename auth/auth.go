@@ -1,19 +1,27 @@
-package main
+package auth
 
 import (
 	context "context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	jwt "github.com/golang-jwt/jwt/v4"
+	"github.com/sirupsen/logrus"
 	pb "go.gazette.dev/core/broker/protocol"
 
 	"google.golang.org/grpc/metadata"
 )
 
-func authorized(ctx context.Context) (*AuthorizedClaims, error) {
+var (
+	MissingAuthHeader = errors.New("missing or empty Authorization header")
+	InvalidAuthHeader = errors.New("invalid Authorization header")
+	Unauthorized      = errors.New("you are not authorized to access this resource")
+)
+
+func Authorized(ctx context.Context, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 
 	if !ok {
@@ -22,29 +30,41 @@ func authorized(ctx context.Context) (*AuthorizedClaims, error) {
 
 	auth := md.Get("authorization")
 	if len(auth) == 0 {
-		return nil, fmt.Errorf("Unauthenticated: No Authorization")
+		return nil, MissingAuthHeader
 	} else if len(auth[0]) == 0 {
-		return nil, fmt.Errorf("Unauthenticated: Empty Authorization")
+		return nil, MissingAuthHeader
 	} else if !strings.HasPrefix(auth[0], "Bearer ") {
-		return nil, fmt.Errorf("Unauthenticated: Authentication type must be `Bearer`")
+		return nil, InvalidAuthHeader
 	}
 
 	value := strings.TrimPrefix(auth[0], "Bearer ")
 
-	return decodeJwt(value)
+	return decodeJwt(value, jwtVerificationKey)
 }
 
-func authorized_req(req *http.Request) (*AuthorizedClaims, error) {
+func AuthorizedReq(req *http.Request, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
 	auth := req.Header.Get("authorization")
 	if len(auth) == 0 {
-		return nil, fmt.Errorf("Unauthenticated: Missing or empty authorization header")
+		return nil, MissingAuthHeader
 	} else if !strings.HasPrefix(auth, "Bearer ") {
-		return nil, fmt.Errorf("Unauthenticated: Authentication type must be `Bearer`")
+		return nil, InvalidAuthHeader
 	}
 
 	value := strings.TrimPrefix(auth, "Bearer ")
 
-	return decodeJwt(value)
+	var claims, err = decodeJwt(value, jwtVerificationKey)
+	// The error returned from decodeJwt may contain helpful details, but we don't want to provide all those details
+	// to the client. Instead we log the detailed error here and return a simpler error. This also makes it easier to
+	// match errors as part of error handling.
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"host":  req.Host,
+			"URI":   req.RequestURI,
+			"error": err,
+		}).Warn("invalid Authorization header")
+		return nil, InvalidAuthHeader
+	}
+	return claims, nil
 }
 
 type AuthorizedClaims struct {
@@ -53,31 +73,31 @@ type AuthorizedClaims struct {
 	jwt.RegisteredClaims
 }
 
-func decodeJwt(tokenString string) (*AuthorizedClaims, error) {
+func decodeJwt(tokenString string, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
 	parseOpts := jwt.WithValidMethods([]string{"HS256"})
 	token, err := jwt.ParseWithClaims(tokenString, new(AuthorizedClaims), func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok || token.Method.Alg() != "HS256" {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return []byte(*jwtVerificationKey), nil
+		return jwtVerificationKey, nil
 	}, parseOpts)
 
 	if err != nil {
-		return nil, fmt.Errorf("Authentication failed: %w", err)
+		return nil, fmt.Errorf("parsing jwt: %w", err)
 	}
 
 	if !token.Valid {
-		return nil, fmt.Errorf("Authentication failed: Token not valid!")
+		return nil, fmt.Errorf("JWT validation failed")
 	}
 
 	authClaims := token.Claims.(*AuthorizedClaims)
 
 	if !authClaims.VerifyExpiresAt(time.Now(), true) {
-		return nil, fmt.Errorf("Authentication failed: Token has expired! %v", authClaims.ExpiresAt)
+		return nil, fmt.Errorf("JWT expired at %v", authClaims.ExpiresAt)
 	}
 	if !authClaims.VerifyIssuedAt(time.Now(), true) {
-		return nil, fmt.Errorf("Authentication failed: Token has invalid issued at! %v", authClaims.IssuedAt)
+		return nil, fmt.Errorf("JWT iat is invalid: %v", authClaims.IssuedAt)
 	}
 
 	return authClaims, nil
@@ -90,7 +110,7 @@ var authorizingLabels = []string{
 	"estuary.dev/task-name",
 }
 
-func enforceSelectorPrefix(claims *AuthorizedClaims, selector pb.LabelSelector) error {
+func EnforceSelectorPrefix(claims *AuthorizedClaims, selector pb.LabelSelector) error {
 
 	var authorizedLabels = 0
 
@@ -100,7 +120,7 @@ func enforceSelectorPrefix(claims *AuthorizedClaims, selector pb.LabelSelector) 
 				continue
 			}
 
-			err := enforcePrefix(claims, label.Value)
+			err := EnforcePrefix(claims, label.Value)
 			if err != nil {
 				return fmt.Errorf("unauthorized `%v` label: %w", authorizingLabel, err)
 			}
@@ -116,12 +136,12 @@ func enforceSelectorPrefix(claims *AuthorizedClaims, selector pb.LabelSelector) 
 	return nil
 }
 
-func enforcePrefix(claims *AuthorizedClaims, name string) error {
+func EnforcePrefix(claims *AuthorizedClaims, name string) error {
 	for _, prefix := range claims.Prefixes {
 		if strings.HasPrefix(name, prefix) {
 			return nil
 		}
 	}
 
-	return fmt.Errorf("%v was not found in claims=%v\n", name, claims.Prefixes)
+	return Unauthorized
 }

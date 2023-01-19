@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/estuary/data-plane-gateway/auth"
 	"github.com/urfave/negroni"
 )
 
@@ -24,14 +25,14 @@ var schemaInferenceHandler = http.HandlerFunc(func(writer http.ResponseWriter, r
 	// Pull JWT from authz header
 	// See auth.go:authorized()
 	// decodeJWT(that bearer token) -> AuthorizedClaims
-	claims, err := authorized_req(req)
+	claims, err := auth.AuthorizedReq(req, []byte(*jwtVerificationKey))
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	collection_name := req.URL.Query().Get("collection")
-	authorization_error := enforcePrefix(claims, collection_name)
+	authorization_error := auth.EnforcePrefix(claims, collection_name)
 
 	// enforcePrefix(claims, collection_name)
 	// collection_name comes from actual inference request

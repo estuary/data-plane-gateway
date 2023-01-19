@@ -6,7 +6,7 @@ const SIGNING_KEY = new TextEncoder().encode("supersecret");
 
 export function makeJwt(
   {
-    prefixes = ["acmeCo/", "ops/acmeCo/", "recovery/capture/acmeCo/"],
+    prefixes = ["acmeCo/", "ops.us-central1.v1/", "recovery/capture/acmeCo/"],
     expiresAt = "1h",
     key = SIGNING_KEY,
   }: { prefixes?: string[]; expiresAt?: string | number; key?: Uint8Array },

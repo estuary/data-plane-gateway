@@ -23,7 +23,7 @@ func logUnaryRPC(ctx context.Context, method string, req, reply interface{}, cc 
 	var err = invoker(ctx, method, req, reply, cc, opts...)
 	log.WithFields(log.Fields{
 		"method":     method,
-		"timeMillis": time.Now().UTC().Sub(start).Milliseconds,
+		"timeMillis": time.Now().UTC().Sub(start).Milliseconds(),
 		"error":      err,
 	}).Debug("finished gRPC client request")
 	return err
