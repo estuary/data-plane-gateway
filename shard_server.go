@@ -4,24 +4,27 @@ import (
 	context "context"
 	"fmt"
 
+	"github.com/estuary/data-plane-gateway/auth"
 	log "github.com/sirupsen/logrus"
 	pc "go.gazette.dev/core/consumer/protocol"
 )
 
 type ShardAuthServer struct {
-	clientCtx   context.Context
-	shardClient pc.ShardClient
+	clientCtx          context.Context
+	shardClient        pc.ShardClient
+	jwtVerificationKey []byte
 }
 
-func NewShardAuthServer(ctx context.Context) *ShardAuthServer {
+func NewShardAuthServer(ctx context.Context, jwtVerificationKey []byte) *ShardAuthServer {
 	shardClient, err := newShardClient(ctx, *consumerAddr)
 	if err != nil {
 		log.Fatalf("Failed to connect to consumer: %v", err)
 	}
 
 	authServer := &ShardAuthServer{
-		clientCtx:   ctx,
-		shardClient: shardClient,
+		clientCtx:          ctx,
+		shardClient:        shardClient,
+		jwtVerificationKey: jwtVerificationKey,
 	}
 
 	return authServer
@@ -41,12 +44,12 @@ func newShardClient(ctx context.Context, addr string) (pc.ShardClient, error) {
 
 // List implements protocol.ShardServer
 func (s *ShardAuthServer) List(ctx context.Context, req *pc.ListRequest) (*pc.ListResponse, error) {
-	claims, err := authorized(ctx)
+	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return nil, err
 	}
 
-	err = enforceSelectorPrefix(claims, req.Selector)
+	err = auth.EnforceSelectorPrefix(claims, req.Selector)
 	if err != nil {
 		return nil, fmt.Errorf("Unauthorized: %w", err)
 	}
@@ -57,12 +60,12 @@ func (s *ShardAuthServer) List(ctx context.Context, req *pc.ListRequest) (*pc.Li
 
 // Stat implements protocol.ShardServer
 func (s *ShardAuthServer) Stat(ctx context.Context, req *pc.StatRequest) (*pc.StatResponse, error) {
-	claims, err := authorized(ctx)
+	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return nil, err
 	}
 
-	err = enforcePrefix(claims, req.Shard.String())
+	err = auth.EnforcePrefix(claims, req.Shard.String())
 	if err != nil {
 		return nil, fmt.Errorf("Unauthorized: %w", err)
 	}

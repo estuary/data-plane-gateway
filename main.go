@@ -5,13 +5,13 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
-	"time"
 
+	"github.com/estuary/data-plane-gateway/proxy"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/jamiealquiza/envy"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,6 +19,8 @@ import (
 	pb "go.gazette.dev/core/broker/protocol"
 	pc "go.gazette.dev/core/consumer/protocol"
 	"go.gazette.dev/core/task"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 )
 
@@ -41,15 +43,11 @@ var (
 	debugPort = flag.String("debug-port", "28316", "Port for serving metrics and debug endpoints")
 	zone      = flag.String("zone", "local", "Availability zone within which this process is running")
 
+	hostname = flag.String("hostname", "localhost", "The hostname that clients use to connect to the gateway")
+
 	// Args for providing the tls certificate the old fashioned way
 	tls_cert        = flag.String("tls-certificate", "", "Path to the TLS certificate (.crt) to use.")
 	tls_private_key = flag.String("tls-private-key", "", "The private key for the TLS certificate")
-
-	// Args that are required for automatically acquiring TLS certificates
-	autoAcquireCert      = flag.String("auto-tls-cert", "", "Automatically acquire TLS certificate from Let's Encrypt for the given domain using the ACME protocol")
-	etcdEndpoint         = flag.String("etcd-endpoint", "localhost:2379", "ETCD URL to connect to for managing TLS certificates. Only used when auto-tls-cert argument is provided")
-	autoAcquireCertEmail = flag.String("tls-cert-email", "", "email address to associate with the automatically acquired TLS certificate")
-	autoRenewCertBefore  = flag.Int("tls-renew-before-days", 30, "attempt to renew the certificate this many days before it expires")
 )
 
 var corsConfig *corsSettings
@@ -63,6 +61,31 @@ func main() {
 	}
 	log.SetLevel(lvl)
 	log.SetFormatter(&log.JSONFormatter{})
+
+	grpc.EnableTracing = true
+	grpc_prometheus.EnableHandlingTimeHistogram()
+	grpc_prometheus.EnableClientHandlingTimeHistogram()
+
+	if *tls_cert == "" {
+		log.Fatal("TLS is required in order to run data-plane-gateway. Missing TLS arguments")
+	}
+	if *tls_private_key == "" {
+		log.Fatal("must supply --tls-private-key with --tls-certificate")
+	}
+
+	crt, err := tls.LoadX509KeyPair(*tls_cert, *tls_private_key)
+	if err != nil {
+		log.Fatalf("failed to load tls certificate: %v", err)
+	}
+	log.Info("loaded tls certificate")
+	var certificates = []tls.Certificate{crt}
+
+	tlsPortNum, err := strconv.ParseUint(*tlsPort, 10, 16)
+	if err != nil {
+		log.Fatalf("invalid tls port number: '%s': %w", *tlsPort, err)
+	}
+
+	// TODO: this sets a global that's used in rest.go :( Can we fix that?
 	corsConfig = NewCorsSettings(*corsOrigin)
 
 	pb.RegisterGRPCDispatcher(*zone)
@@ -75,8 +98,8 @@ func main() {
 	ctx := pb.WithDispatchDefault(context.Background())
 	var tasks = task.NewGroup(ctx)
 
-	journalServer := NewJournalAuthServer(ctx)
-	shardServer := NewShardAuthServer(ctx)
+	journalServer := NewJournalAuthServer(ctx, []byte(*jwtVerificationKey))
+	shardServer := NewShardAuthServer(ctx, []byte(*jwtVerificationKey))
 	pb.RegisterJournalServer(grpcServer, journalServer)
 	pc.RegisterShardServer(grpcServer, shardServer)
 
@@ -88,24 +111,13 @@ func main() {
 	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
 	schemaInferenceHandler := NewSchemaInferenceServer(ctx)
 
-	plainMux := http.NewServeMux()
-	plainMux.Handle("/healthz", healthHandler)
-	plainMux.Handle("/infer_schema", schemaInferenceHandler)
-	plainMux.Handle("/", restHandler)
+	// These routes will be exposed to the public internet and used for handling both http and https requests.
+	publicMux := http.NewServeMux()
+	publicMux.Handle("/healthz", healthHandler)
+	publicMux.Handle("/infer_schema", schemaInferenceHandler)
+	publicMux.Handle("/", restHandler)
 
-	httpsMux := http.NewServeMux()
-	httpsMux.Handle("/healthz", healthHandler)
-	httpsMux.Handle("/infer_schema", schemaInferenceHandler)
-	httpsMux.Handle("/", restHandler)
-
-	debugMux := http.NewServeMux()
-	debugMux.Handle("/metrics", promhttp.Handler())
-	debugMux.Handle("/healthz", healthHandler)
-	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
-	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	proxyServer, tappedListener, err := proxy.NewTlsProxyServer(*hostname, uint16(tlsPortNum), certificates, shardServer.shardClient, []byte(*jwtVerificationKey))
 
 	// compose both http and grpc into a single handler, that dispatches each request based on
 	// the content-type. It's important that we do this on a per-request basis instead of a
@@ -116,72 +128,45 @@ func main() {
 		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("content-type"), "application/grpc") {
 			grpcServer.ServeHTTP(w, r)
 		} else {
-			httpsMux.ServeHTTP(w, r)
+			publicMux.ServeHTTP(w, r)
 		}
 	})
 
-	var plainServer = &http.Server{
-		Handler: plainMux,
-		Addr:    fmt.Sprintf(":%s", *plainPort),
-	}
-	var httpsServer = &http.Server{
-		Handler: mixedHandler,
-	}
+	// These routes will be exposed on an internal network port
+	debugMux := http.NewServeMux()
+	debugMux.Handle("/metrics", promhttp.Handler())
+	debugMux.Handle("/healthz", healthHandler)
+	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
+	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
 	var debugServer = &http.Server{
 		Handler: debugMux,
 		Addr:    fmt.Sprintf(":%s", *debugPort),
 	}
 
-	// This plain listener will be wrapped in one that does TLS termination. The implementation will
-	// depend on whether the TLS cert was provided directly versus us provisioning it automatically.
-	tlsListener, err := net.Listen("tcp", fmt.Sprintf(":%s", *tlsPort))
-	if err != nil {
-		log.Fatalf("failed to start listener: %v", err)
-	}
-
-	if *tls_cert != "" {
-		if *tls_private_key == "" {
-			log.Fatalf("must supply --tls-private-key with --tls-certificate")
-		}
-		log.Info("using TLS with provided certificate and key")
-
-		crt, err := tls.LoadX509KeyPair(*tls_cert, *tls_private_key)
-		if err != nil {
-			log.Fatalf("failed to load tls certificate: %v", err)
-		}
-
-		var config = tls.Config{
-			Certificates: []tls.Certificate{crt},
-			// NextProtos is someone's clever name for the list of supported ALPN protocols.
-			// We need to explicitly configure support for HTTP2 here, or else it won't be offered.
-			NextProtos: []string{"h2", "http/1.1"},
-		}
-		tlsListener = tls.NewListener(tlsListener, &config)
-	} else if *autoAcquireCert != "" {
-		if *autoRenewCertBefore < 0 {
-			log.Fatalf("--tls-renew-before-days must not be negative")
-		}
-		log.Info("using autocert to provision TLS certificates")
-		var certRenewBefore = 24 * time.Hour * time.Duration(*autoRenewCertBefore)
-		certProvider, err := NewCertProvider(*autoAcquireCert, *etcdEndpoint, *autoAcquireCertEmail, certRenewBefore)
-		if err != nil {
-			log.Fatalf("initializing autocert: %v", err)
-		}
-		tlsListener = tls.NewListener(tlsListener, certProvider.TLSConfig())
-		// Plain http will respond to ACME http-01 challenges and health checks.
-		plainServer.Handler = certProvider.acManager.HTTPHandler(plainMux)
-	} else {
-		panic("TLS is required in order to run data-plane-gateway. Missing TLS arguments")
-	}
-
 	tasks.Queue("http server", func() error {
 		log.WithField("port", plainPort).Info("started HTTP server")
 		log.Printf("Started HTTP server")
-		return plainServer.ListenAndServe()
+		var http2Server = &http2.Server{}
+
+		// Use h2c with the plain listener to allow grpc to work without https.
+		// This is at best completely unnecessary in production, but it helps remove friction for local development
+		// because it allows configuring a single gateway URL in control-plane that work for both the UI, which
+		// cannot easily trust self-signed certs, and for flowctl, which must use gRPC (h2).
+		var handler = h2c.NewHandler(mixedHandler, http2Server)
+		return http.ListenAndServe(fmt.Sprintf(":%s", *plainPort), handler)
+	})
+
+	tasks.Queue("proxy server", func() error {
+		log.WithField("port", tlsPort).Info("started TLS proxy server")
+		return proxyServer.Run()
 	})
 	tasks.Queue("https server", func() error {
 		log.WithField("port", tlsPort).Info("started HTTPS/GRPC server")
-		return httpsServer.Serve(tlsListener)
+		return http.Serve(tappedListener, mixedHandler)
 	})
 	tasks.Queue("debug server", func() error {
 		log.WithField("port", debugPort).Info("started debug server")
@@ -190,7 +175,7 @@ func main() {
 
 	tasks.GoRun()
 
-	log.Printf("Listening on %s\n", tlsListener.Addr().String())
+	log.Printf("Listening on %s\n", tappedListener.Addr().String())
 
 	err = tasks.Wait()
 	if err != nil {

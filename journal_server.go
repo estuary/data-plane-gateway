@@ -4,24 +4,27 @@ import (
 	context "context"
 	"fmt"
 
+	"github.com/estuary/data-plane-gateway/auth"
 	log "github.com/sirupsen/logrus"
 	pb "go.gazette.dev/core/broker/protocol"
 )
 
 type JournalAuthServer struct {
-	clientCtx     context.Context
-	journalClient pb.JournalClient
+	clientCtx          context.Context
+	journalClient      pb.JournalClient
+	jwtVerificationKey []byte
 }
 
-func NewJournalAuthServer(ctx context.Context) *JournalAuthServer {
+func NewJournalAuthServer(ctx context.Context, jwtVerificationKey []byte) *JournalAuthServer {
 	journalClient, err := newJournalClient(ctx, *brokerAddr)
 	if err != nil {
 		log.Fatalf("Failed to connect to broker: %v", err)
 	}
 
 	authServer := &JournalAuthServer{
-		clientCtx:     ctx,
-		journalClient: journalClient,
+		clientCtx:          ctx,
+		journalClient:      journalClient,
+		jwtVerificationKey: jwtVerificationKey,
 	}
 
 	return authServer
@@ -39,12 +42,12 @@ func newJournalClient(ctx context.Context, addr string) (pb.JournalClient, error
 
 // List implements protocol.JournalServer
 func (s *JournalAuthServer) List(ctx context.Context, req *pb.ListRequest) (*pb.ListResponse, error) {
-	claims, err := authorized(ctx)
+	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return nil, err
 	}
 
-	err = enforceSelectorPrefix(claims, req.Selector)
+	err = auth.EnforceSelectorPrefix(claims, req.Selector)
 	if err != nil {
 		return nil, fmt.Errorf("Unauthorized: %w", err)
 	}
@@ -55,12 +58,12 @@ func (s *JournalAuthServer) List(ctx context.Context, req *pb.ListRequest) (*pb.
 
 // ListFragments implements protocol.JournalServer
 func (s *JournalAuthServer) ListFragments(ctx context.Context, req *pb.FragmentsRequest) (*pb.FragmentsResponse, error) {
-	claims, err := authorized(ctx)
+	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return nil, err
 	}
 
-	err = enforcePrefix(claims, req.Journal.String())
+	err = auth.EnforcePrefix(claims, req.Journal.String())
 	if err != nil {
 		return nil, fmt.Errorf("Unauthorized: %w", err)
 	}
@@ -72,12 +75,12 @@ func (s *JournalAuthServer) ListFragments(ctx context.Context, req *pb.Fragments
 func (s *JournalAuthServer) Read(readReq *pb.ReadRequest, readServer pb.Journal_ReadServer) error {
 	ctx := readServer.Context()
 
-	claims, err := authorized(ctx)
+	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return err
 	}
 
-	err = enforcePrefix(claims, readReq.Journal.String())
+	err = auth.EnforcePrefix(claims, readReq.Journal.String())
 	if err != nil {
 		return fmt.Errorf("Unauthorized: %w", err)
 	}

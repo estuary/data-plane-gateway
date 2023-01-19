@@ -34,11 +34,11 @@ Deno.test("JournalClient.list name selector test", async () => {
 Deno.test("JournalClient.list prefix selector test", async () => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
   const expectedJournals = [
-    "ops/acmeCo/logs/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
-    "ops/acmeCo/stats/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
+    "ops.us-central1.v1/logs/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
+    "ops.us-central1.v1/stats/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
   ];
 
-  const prefixSelector = JournalSelector.prefix("ops/acmeCo/");
+  const prefixSelector = JournalSelector.prefix("ops.us-central1.v1/");
   const journals = (await client.list(prefixSelector)).unwrap();
 
   assertEquals(2, journals.length);
@@ -48,14 +48,14 @@ Deno.test("JournalClient.list prefix selector test", async () => {
 Deno.test("JournalClient.list exclusion selector test", async () => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
-  const prefixSelector = JournalSelector.prefix("ops/acmeCo/");
-  const excludedSelector = new JournalSelector().collection("ops/acmeCo/stats");
+  const prefixSelector = JournalSelector.prefix("ops.us-central1.v1/");
+  const excludedSelector = new JournalSelector().collection("ops.us-central1.v1/stats");
   const journals = (await client.list(prefixSelector, excludedSelector))
     .unwrap();
 
   assertEquals(1, journals.length);
   assertEquals(
-    "ops/acmeCo/logs/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
+    "ops.us-central1.v1/logs/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
     journals[0].name,
   );
 });
@@ -150,5 +150,5 @@ Deno.test("JournalClient.read unauthorized prefix", async () => {
   };
   const error = (await client.read(req)).unwrap_err();
 
-  assertMatch(error.body.message!, new RegExp("was not found in claims"));
+  assertMatch(error.body.message!, new RegExp("Unauthorized: you are not authorized to access this resource"));
 });

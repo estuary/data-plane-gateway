@@ -2,12 +2,12 @@
   'ShardClient.stat test': {
     status: 'OK',
     readThrough: {
-      'acmeCo/source-hello-world/eof': 'who cares',
       'acmeCo/source-hello-world/txn': '[MASKED string]',
+      'acmeCo/source-hello-world/eof': 'who cares',
     },
     publishAt: {
       'acmeCo/greetings/pivot=00': '[MASKED string]',
-      'ops/acmeCo/stats/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00': '[MASKED string]',
+      'ops.us-central1.v1/stats/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00': '[MASKED string]',
     },
   },
 }

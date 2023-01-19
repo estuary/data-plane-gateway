@@ -14,6 +14,10 @@ We use the [grpc-gateway](https://github.com/grpc-ecosystem/grpc-gateway/) proje
 
 The GRPC side of the Gateway proxies requests to our main Gazette cluster. First we check for an authentication token issued by the Control Plane. This token provides us with a set of authorized prefixes. We authorize requests by checking the provided label selectors on a request against these authorized prefixes. Once authorized, requests are sent along to Gazette proper.
 
+### Proxying to containers
+
+The data plane gateway also proxies network traffic to containers of running shards. The shard and port are encoded in a subdomain label, which is used to lookup the shard and information about the ports it exposes. If the protocol associated with the port is http (`h2` or `http/1.1`), then the gateway can optionally enforce authorization as described above. This allows shards to expose "private" http ports, which are only accessible to authorized users.
+
 ## Build
 
 To build the Gateway:
@@ -26,21 +30,19 @@ go install .
 
 ## Usage
 
-The data plane gateway always requires TLS. You can either provide the certificate yourself, or have it automatically provision its own certificate. There is no option for running without TLS. Both of the following commands launche the Gateway on port 28318. This port will serve both the REST (HTTPS) and GRPC traffic. The gateway will also listen on a non-tls port, but on this port it will only serve the health check endpoint and the ACME challenge responses (if automatic cert management is enabled).
+The data plane gateway always requires TLS. There is no option for running without TLS.
+The following command launches the Gateway on port 28318. This port will be used for serving REST and GRPC handlers, as well as for proxying connections to running containers.
+The gateway will also listen on a non-tls port, but on this port it will only serve the health check endpoint and the ACME challenge responses (if automatic cert management is enabled).
 
-To run the Gateway using an existing TLS certificate:
-
-```console
-data-plane-gateway --tls-certificate /path/to/cert.pem --tls-private-key /path/to/key.pem
-```
-
-The gateway can also be made to provision and renew its own TLS certificate automatically, using Let's Encrypt and the `autocert` package:
+To run the Gateway:
 
 ```console
-data-plane-gateway --auto-tls-cert <hostname> --tls-cert-email <email-address> --etcd-endpoint <etcd-url>
+data-plane-gateway --tls-certificate /path/to/cert.pem --tls-private-key /path/to/key.pem --hostname localhost
 ```
 
-The `<hostname>` will be used as the subject common name of the certificate, and the server must be reachable by that name. Etcd is used to persist both the certificate itself, as well as any intermediate data that's used to obtain it.
+The `<hostname>` must match the subject common name of the certificate, and the server must be reachable by that name.
+Proxy connections are always handled on a subdomain of the provided `--hostname`. For example, if you pass `--hostname localhost`,
+then proxy connections would be of the form `123abc-8080.localhost`.
 
 Use `data-plane-gateway --help` for more options.
 
@@ -62,7 +64,8 @@ The Gateway extensively uses code generation tools. This generated code is check
 * `journal_server.go` enforces auth on top of the Gazette JournalServer interface.
 * `shard_server.go` enforces auth on top of the Gazette ShardServer interface.
 * `main.go` multiplexes the REST server and the GRPC server.
-* `auth.go` decodes authentication tokens from the Control Plane and enforces our authorization rules.
+* `auth/` decodes authentication tokens from the Control Plane and enforces our authorization rules.
+* `proxy/` handles both tcp and http proxying to containers running in the data plane.
 * `client/src` defines a TypeScript library that can interact with the REST api.
 * `client/dist` contains the generated JavaScript package.
 * `build.sh` wrangles all the configuration options for building the gateway.

@@ -75,7 +75,7 @@ snapshotTest("ShardClient.stat test", async ({ assertSnapshot }) => {
   const masks = [
     "/readThrough/acmeCo\/source-hello-world\/txn",
     "/publishAt/acmeCo\/greetings\/pivot=00",
-    "/publishAt/ops\/acmeCo\/stats\/kind=capture\/name=acmeCo%2Fsource-hello-world\/pivot=00",
+    "/publishAt/ops.us-central1.v1\/stats\/kind=capture\/name=acmeCo%2Fsource-hello-world\/pivot=00",
   ];
   assertSnapshot(pluck(stats), masks);
 });

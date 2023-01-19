@@ -74,7 +74,7 @@ func logRestDelegateRPC(ctx context.Context, method string, req, reply interface
 	var err = invoker(ctx, method, req, reply, cc, opts...)
 	log.WithFields(log.Fields{
 		"method":     method,
-		"timeMillis": time.Now().UTC().Sub(start).Milliseconds,
+		"timeMillis": time.Now().UTC().Sub(start).Milliseconds(),
 		"error":      err,
 	}).Debug("finished REST delegate gRPC")
 	return err
