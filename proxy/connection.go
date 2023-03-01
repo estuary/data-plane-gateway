@@ -24,13 +24,17 @@ type ProxyConnection struct {
 }
 
 func (pc *ProxyConnection) singleConnectionTransport(useHttp2 bool) *http.Transport {
+	// There's potential for significant future improvement here, if we can dynamically
+	// re-establish upstream connections when they break. For now, we're just handling
+	// those cases by telling the client to close its connection, so it'll re-establish
+	// a new one on the next attempt.
 	return &http.Transport{
 		DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
 			log.WithFields(log.Fields{
 				"hostname": pc.hostname,
 				"shardID":  pc.shardID,
-			}).Info("returning proxy connection from dialer")
-			return pc, nil
+			}).Debug("returning proxy connection from dialer")
+			return KeepOpenProxyConn{ProxyConnection: pc}, nil
 		},
 		MaxIdleConns:        1,
 		MaxIdleConnsPerHost: 1,
@@ -40,6 +44,19 @@ func (pc *ProxyConnection) singleConnectionTransport(useHttp2 bool) *http.Transp
 		MaxResponseHeaderBytes: 0,
 		ForceAttemptHTTP2:      useHttp2,
 	}
+}
+
+// KeepOpenProxyConn is returned from the http transport as the upstream
+// connection for the proxy handler. It overrides the Close function to
+// prevent the upstream connection from being closed until the client
+// connection is also closed.
+type KeepOpenProxyConn struct {
+	*ProxyConnection
+}
+
+func (pc KeepOpenProxyConn) Close() error {
+	log.Debug("keeping open proxy connection")
+	return nil
 }
 
 // TODO: Do we need to handle deadlines?

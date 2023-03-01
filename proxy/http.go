@@ -41,7 +41,7 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 				"error":      err,
 				"URI":        req.RequestURI,
 			}).Error("proxy error")
-			httpProxyError(err, w, req)
+			handleHttpError(err, w, req)
 		},
 
 		Director: func(req *http.Request) {
@@ -65,7 +65,7 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 				authErr = auth.EnforcePrefix(claims, proxyConn.taskName)
 			}
 			if authErr != nil {
-				httpProxyError(authErr, w, req)
+				handleHttpError(authErr, w, req)
 				return
 			}
 		}
@@ -115,10 +115,22 @@ var errTemplate = template.Must(template.New("proxy-error").Parse(`<!DOCTYPE htm
 	</body>
 </html>`))
 
-func httpProxyError(err error, w http.ResponseWriter, r *http.Request) {
+func handleHttpError(err error, w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	var contentType string
 	var status = httpStatus(err)
+
+	// If the error was caused by an issue with the upstream connection, then we must
+	// ask the client to close the connection and create a new one. This is important
+	// because the http proxy handler isn't currently able to re-establish connections
+	// in response to them breaking. So if the client continues to use this connection,
+	// then they will continue to get 5xx errors due to the broken upstream connection.
+	// Note that, while the `Connection` header is not compatible with http2, the Go
+	// http2 package seems to handle this by removing the header and sending a GOAWAY.
+	// In fact, this is the _only_ way I can figure out how to send a GOAWAY from a handler.
+	if status >= 500 {
+		w.Header().Add("Connection", "close")
+	}
 
 	var headers = r.Header["Accept"]
 	var accept string
