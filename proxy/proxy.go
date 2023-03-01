@@ -275,25 +275,6 @@ func (h *ProxyHandler) GetAlpnProtocols(hello *tls.ClientHelloInfo) ([]string, e
 		// remove if we find it's not necessary.
 		return strings.Split(configuredProto, ","), nil
 	}
-	// The port configuration from the shard does not specify an alpn protocol.
-	// That's fine. From DPG's perspective, we don't care what the protocol is, or if alpn is used at all.
-	// So in that case we just use whatever alpn protocol(s) were provided in the client hello.
-	// In the case that the client hello specifies either 0 or 1 candidate protocol, we have no reason
-	// to believe the negotiated protocol would be incorrect, regardless of what it is.
-	// But if the client hello contains _multiple_ candidate protocols, there is significant
-	// possibility of a mismatch between the negotiated protocol and the one that is expected
-	// by the actual container. BUT, given that users won't have direct visibility to DPG logs,
-	// we'll allow the connection to succeed anyway and let the container log any possible protocol errors,
-	// since those will at least be visible to users.
-	// We are likely to hit this warning if users fail to specify a protocol for an HTTP listener, since most
-	// clients these days will offer at least `h2,http/1.1`.
-	if len(hello.SupportedProtos) > 1 {
-		log.WithFields(log.Fields{
-			"sni":          hello.ServerName,
-			"clientAddr":   hello.Conn.RemoteAddr().String(),
-			"clientProtos": strings.Join(hello.SupportedProtos, ","),
-		}).Warn("client ALPN supports multiple protocols, but the configuration for the port does not specify a protocol")
-	}
 	return hello.SupportedProtos, nil
 }
 
