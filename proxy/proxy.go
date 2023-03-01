@@ -371,18 +371,26 @@ func (h *ProxyHandler) getResolvedShard(ctx context.Context, sni string, clientA
 }
 
 func (h *ProxyHandler) doResolveShard(ctx context.Context, sni string, clientAddr string) (*resolvedShard, error) {
-	var shardHost, targetPort, err = h.parseServerName(sni)
+	var query, err = h.parseServerName(sni)
 	if err != nil {
 		return nil, err
 	}
 
+	var queryLabels = []pb.Label{
+		{Name: labels.ExposePort, Value: strconv.Itoa(int(query.port))},
+		{Name: labels.Hostname, Value: query.hostname},
+	}
+	if query.keyBegin != "" && query.rClockBegin != "" {
+		// It just so happens that the labels will still be sorted after appending these
+		queryLabels = append(queryLabels,
+			pb.Label{Name: labels.KeyBegin, Value: query.keyBegin},
+			pb.Label{Name: labels.RClockBegin, Value: query.rClockBegin},
+		)
+	}
 	listResp, err := h.shardClient.List(ctx, &pc.ListRequest{
 		Selector: pb.LabelSelector{
 			Include: pb.LabelSet{
-				Labels: []pb.Label{
-					{Name: labels.ExposePort, Value: strconv.Itoa(int(targetPort))},
-					{Name: labels.Hostname, Value: shardHost},
-				},
+				Labels: queryLabels,
 			},
 		},
 	})
@@ -436,8 +444,8 @@ func (h *ProxyHandler) doResolveShard(ctx context.Context, sni string, clientAdd
 		spec:       shard.Spec,
 		route:      shard.Route,
 		labeling:   labeling,
-		shardHost:  shardHost,
-		targetPort: targetPort,
+		shardHost:  query.hostname,
+		targetPort: query.port,
 		fetchedAt:  time.Now(),
 	}, nil
 }
@@ -609,29 +617,50 @@ func validateOpenResponse(resp *pf.TaskNetworkProxyResponse_OpenResponse) error 
 	return nil
 }
 
-func (h *ProxyHandler) parseServerName(sni string) (string, uint16, error) {
+type shardQuery struct {
+	hostname string
+	port     uint16
+	// We don't bother to parse out the keyBegin and rClockBegin fields
+	// because we'd only need to convert them to strings again to use as
+	// label selectors.
+	keyBegin    string
+	rClockBegin string
+}
+
+func (h *ProxyHandler) parseServerName(sni string) (*shardQuery, error) {
 	var shardAndPort, domainSuffix, ok = strings.Cut(sni, ".")
 	if !ok {
-		return "", 0, fmt.Errorf("sni does not have enough components")
+		return nil, fmt.Errorf("sni does not have enough components")
 	}
 	if domainSuffix != h.hostname {
-		return "", 0, fmt.Errorf("invalid sni does not match domain suffix")
+		return nil, fmt.Errorf("invalid sni does not match domain suffix")
 	}
 	if len(shardAndPort) == 0 {
-		return "", 0, fmt.Errorf("invalid sni contains empty label")
+		return nil, fmt.Errorf("invalid sni contains empty label")
 	}
 
-	shardHost, portValue, ok := strings.Cut(shardAndPort, "-")
-	if !ok {
-		return "", 0, fmt.Errorf("invalid subdomain, missing '-'")
+	var query = &shardQuery{}
+	var parts = strings.Split(shardAndPort, "-")
+	var portStr string
+	if len(parts) == 2 {
+		query.hostname = parts[0]
+		portStr = parts[1]
+	} else if len(parts) == 4 {
+		query.hostname = parts[0]
+		query.keyBegin = parts[1]
+		query.rClockBegin = parts[2]
+		portStr = parts[3]
+	} else {
+		return nil, fmt.Errorf("invalid subdomain")
 	}
 
-	var targetPort, err = strconv.ParseUint(portValue, 10, 16)
+	var targetPort, err = strconv.ParseUint(portStr, 10, 16)
 	if err != nil {
-		return "", 0, fmt.Errorf("parsing subdomain port number: %w", err)
+		return nil, fmt.Errorf("parsing subdomain port number: %w", err)
 	}
+	query.port = uint16(targetPort)
 
-	return shardHost, uint16(targetPort), nil
+	return query, nil
 }
 
 var ProxyConnectionsAcceptedCounter = promauto.NewCounterVec(prometheus.CounterOpts{
