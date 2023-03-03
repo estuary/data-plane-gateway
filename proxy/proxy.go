@@ -33,7 +33,7 @@ var ProtoNotHttp = errors.New("invalid protocol for port")
 
 // TappedListener is a net.Listener for all of the connections that are _not_ handled by the ProxyServer.
 type TappedListener struct {
-	cancelFunc  context.CancelFunc
+	closeCh     chan<- struct{}
 	proxyServer *ProxyServer
 	recv        <-chan acceptResult
 }
@@ -62,7 +62,7 @@ type acceptResult struct {
 // Any blocked Accept operations will be unblocked and return errors.
 func (l *TappedListener) Close() error {
 	var err = l.proxyServer.tlsListener.Close()
-	l.cancelFunc()
+	close(l.closeCh)
 	return err
 }
 
@@ -72,7 +72,7 @@ func (l *TappedListener) Addr() net.Addr {
 }
 
 type ProxyServer struct {
-	ctx          context.Context
+	closeCh      <-chan struct{}
 	tlsListener  net.Listener
 	overflow     chan<- acceptResult
 	proxyHandler *ProxyHandler
@@ -90,7 +90,7 @@ func NewTlsProxyServer(hostname string, port uint16, tlsCerts []tls.Certificate,
 	if err != nil {
 		return nil, nil, err
 	}
-	var ctx, cancelFunc = context.WithCancel(context.Background())
+	var closeCh = make(chan struct{})
 	var proxyHandler = newHandler(hostname, shardClient, jwtVerificationKey)
 	var tlsConfig = getTlsConfig(tlsCerts, proxyHandler)
 
@@ -98,14 +98,14 @@ func NewTlsProxyServer(hostname string, port uint16, tlsCerts []tls.Certificate,
 
 	var acceptCh = make(chan acceptResult)
 	var server = &ProxyServer{
-		ctx:          ctx,
+		closeCh:      closeCh,
 		tlsListener:  tlsListener,
 		overflow:     acceptCh,
 		proxyHandler: proxyHandler,
 		baseConfig:   tlsConfig,
 	}
 	var tappedListener = &TappedListener{
-		cancelFunc:  cancelFunc,
+		closeCh:     closeCh,
 		proxyServer: server,
 		recv:        acceptCh,
 	}
@@ -123,14 +123,16 @@ func (ps *ProxyServer) Run() error {
 		log.Info("proxy server shutting down, sending final error to overflow listener")
 		select {
 		case ps.overflow <- acceptResult{err: err}:
-		case <-ps.ctx.Done():
+		case <-ps.closeCh:
 		}
 		close(ps.overflow)
 		log.Info("proxy server shutdown complete")
 	}()
 	for {
-		if err = ps.ctx.Err(); err != nil {
-			return err
+		select {
+		case <-ps.closeCh:
+			return fmt.Errorf("shutting down")
+		default:
 		}
 		var conn net.Conn
 		conn, err = ps.tlsListener.Accept()
@@ -138,21 +140,20 @@ func (ps *ProxyServer) Run() error {
 			log.WithField("error", err).Error("failed to accept tls connection")
 			return err
 		}
-		// Start a new goroutine to hanlde this connection, so we don't block the accept loop
+		// Start a new goroutine to handle this connection, so we don't block the accept loop
 		go func() {
 			// Await the completion of the TLS handshake. This is needed in order to
 			// ensure that ConnectionState is populated with the SNI from the client hello.
 			if hsErr := conn.(*tls.Conn).Handshake(); hsErr != nil {
-				// This may
 				log.WithFields(log.Fields{
 					"error":      hsErr,
 					"clientAddr": conn.RemoteAddr(),
-				}).Warn("tls handshake error")
+				}).Info("tls handshake error")
 				return
 			}
 			var state = conn.(*tls.Conn).ConnectionState()
 
-			if ps.proxyHandler.IsProxySubdomain(state.ServerName) {
+			if ps.proxyHandler.isProxySubdomain(state.ServerName) {
 				log.WithFields(log.Fields{
 					"clientAddr": conn.RemoteAddr(),
 					"sni":        state.ServerName,
@@ -165,18 +166,12 @@ func (ps *ProxyServer) Run() error {
 				}).Debug("sending connection to overflow listener")
 				select {
 				case ps.overflow <- acceptResult{conn: conn.(*tls.Conn)}:
-				case <-ps.ctx.Done():
+				case <-ps.closeCh:
 				}
 
 			}
 		}()
 	}
-}
-
-func (ps *ProxyServer) IsProxyHost(httpHostHeader string) bool {
-	// remove the port from the host header value, if present
-	var host = strings.SplitN(httpHostHeader, ":", 1)[0]
-	return ps.proxyHandler.IsProxySubdomain(host)
 }
 
 func getTlsConfig(certs []tls.Certificate, proxyHandler *ProxyHandler) *tls.Config {
@@ -196,8 +191,8 @@ func getTlsConfig(certs []tls.Certificate, proxyHandler *ProxyHandler) *tls.Conf
 				"clientAddr":   hello.Conn.RemoteAddr(),
 				"clientProtos": hello.SupportedProtos,
 			}).Debug("got tls client hello")
-			if proxyHandler.IsProxySubdomain(hello.ServerName) {
-				var protos, proxyErr = proxyHandler.GetAlpnProtocols(hello)
+			if proxyHandler.isProxySubdomain(hello.ServerName) {
+				var protos, proxyErr = proxyHandler.getAlpnProtocols(hello)
 				if proxyErr != nil {
 					log.WithFields(log.Fields{
 						"sni":        hello.ServerName,
@@ -257,11 +252,11 @@ func newHandler(gatewayHostname string, shardClient pc.ShardClient, jwtVerificat
 	}
 }
 
-func (h *ProxyHandler) IsProxySubdomain(sni string) bool {
+func (h *ProxyHandler) isProxySubdomain(sni string) bool {
 	return strings.HasSuffix(sni, h.proxyDomainSuffix) && len(sni) > len(h.proxyDomainSuffix)
 }
 
-func (h *ProxyHandler) GetAlpnProtocols(hello *tls.ClientHelloInfo) ([]string, error) {
+func (h *ProxyHandler) getAlpnProtocols(hello *tls.ClientHelloInfo) ([]string, error) {
 	if hello.ServerName == "" {
 		return nil, fmt.Errorf("TLS client hello is missing SNI")
 	}
@@ -270,17 +265,12 @@ func (h *ProxyHandler) GetAlpnProtocols(hello *tls.ClientHelloInfo) ([]string, e
 		return nil, err
 	}
 	if configuredProto := resolved.getAlpnProto(); configuredProto != "" {
-		// The protocol can be comma-separated // in order to allow an h2c server running in the connector
+		// The protocol can be comma-separated in order to allow an h2c server running in the connector
 		// to specify `h2,http/1.1`. The importance of this is questionable, so it might be something we
 		// remove if we find it's not necessary.
 		return strings.Split(configuredProto, ","), nil
 	}
 	return hello.SupportedProtos, nil
-}
-
-type reactor struct {
-	conn  *grpc.ClientConn
-	count uint32
 }
 
 // This solution kind of sucks, but it's expedient: An important part of exposing
@@ -578,7 +568,7 @@ func proxyTcp(ctx context.Context, clientConn *tls.Conn, proxyConn *ProxyConnect
 			log.WithFields(log.Fields{
 				"hostname":      proxyConn.hostname,
 				"incomingBytes": incomingBytes,
-			}).Warn("copyProxyRequestData completed successfully")
+			}).Debug("copyProxyRequestData completed successfully")
 			return nil
 		}
 	})

@@ -6,12 +6,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/net/http2"
 	"html/template"
 	"net/http"
 	"net/http/httputil"
 	"strconv"
 	"strings"
+	"time"
+
+	"golang.org/x/net/http2"
 
 	"github.com/estuary/data-plane-gateway/auth"
 	"github.com/estuary/flow/go/labels"
@@ -45,7 +47,6 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 		},
 
 		Director: func(req *http.Request) {
-			// TODO: verify that request Host matches the value of the connection SNI
 			req.URL.Host = proxyConn.hostname
 			req.URL.Scheme = targetScheme
 			if _, ok := req.Header["User-Agent"]; !ok {
@@ -72,20 +73,31 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 		proxy.ServeHTTP(w, req)
 	})
 
+	// These timeouts seemed like reasonable starting points, and haven't been very
+	// carefully considered. But better arbitrary timeouts than no timeouts at all!
 	if clientConn.ConnectionState().NegotiatedProtocol == "h2" {
-		var h2Server = http2.Server{}
+		var h2Server = http2.Server{
+			IdleTimeout: 10 * time.Second,
+		}
 		// The clientConn will be closed automatically by ServeConn, but we'll need to close the proxyConn ourselves
 		h2Server.ServeConn(clientConn, &http2.ServeConnOpts{
 			Context: ctx,
 			Handler: handlerFunc,
+			BaseConfig: &http.Server{
+				IdleTimeout:  10 * time.Second,
+				ReadTimeout:  20 * time.Second,
+				WriteTimeout: 20 * time.Second,
+			},
 		})
-		// TODO: h2Server.ServeConn does not return an error, so not really sure what to return here
 		return nil
 	} else {
 		// We'll be speaking http/1.1, which requires a 3rd party library because there's no ServeConn function in Go's http package.
 		var server = fasthttp.Server{
-			Handler: fasthttpadaptor.NewFastHTTPHandler(handlerFunc),
-			Name:    fmt.Sprintf("%s (%s)", proxyConn.hostname, clientConn.RemoteAddr().String()),
+			Handler:      fasthttpadaptor.NewFastHTTPHandler(handlerFunc),
+			Name:         fmt.Sprintf("%s (%s)", proxyConn.hostname, clientConn.RemoteAddr().String()),
+			IdleTimeout:  10 * time.Second,
+			ReadTimeout:  20 * time.Second,
+			WriteTimeout: 20 * time.Second,
 		}
 
 		return server.ServeConn(clientConn)
@@ -145,12 +157,10 @@ func handleHttpError(err error, w http.ResponseWriter, r *http.Request) {
 	} else if strings.Contains(accept, "html") {
 		var buf bytes.Buffer
 		if templateErr := errTemplate.Execute(&buf, err.Error()); templateErr != nil {
-			// TODO:
 			log.WithFields(log.Fields{
 				"origError":     err.Error(),
 				"templateError": templateErr.Error(),
 			}).Error("error rendering html error template")
-			panic(fmt.Sprintf("Error rendering html error template: %v", templateErr))
 		}
 		body = buf.Bytes()
 		contentType = "text/html"

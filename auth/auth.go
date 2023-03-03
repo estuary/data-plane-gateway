@@ -61,7 +61,7 @@ func AuthorizedReq(req *http.Request, jwtVerificationKey []byte) (*AuthorizedCla
 			"host":  req.Host,
 			"URI":   req.RequestURI,
 			"error": err,
-		}).Warn("invalid Authorization header")
+		}).Debug("invalid Authorization header")
 		return nil, InvalidAuthHeader
 	}
 	return claims, nil
