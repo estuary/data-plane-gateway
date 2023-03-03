@@ -3,7 +3,7 @@ module github.com/estuary/data-plane-gateway
 go 1.19
 
 require (
-	github.com/estuary/flow v0.1.6
+	github.com/estuary/flow v0.1.9-0.20230303181027-f65a9d7f1a89
 	github.com/gogo/gateway v1.1.0
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/golang/protobuf v1.5.2
@@ -48,5 +48,3 @@ require (
 	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 )
-
-replace github.com/estuary/flow => /home/phil/projects/flow
