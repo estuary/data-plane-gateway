@@ -185,7 +185,7 @@ func handleHttpError(err error, w http.ResponseWriter, r *http.Request) {
 func httpStatus(err error) int {
 	if err == NoMatchingShard {
 		return 404
-	} else if err == auth.InvalidAuthHeader {
+	} else if err == auth.InvalidAuthHeader || err == auth.UnsupportedAuthType {
 		return 400
 	} else if err == auth.MissingAuthHeader {
 		return 401

@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	MissingAuthHeader = errors.New("missing or empty Authorization header")
-	InvalidAuthHeader = errors.New("invalid Authorization header")
-	Unauthorized      = errors.New("you are not authorized to access this resource")
+	MissingAuthHeader   = errors.New("missing or empty Authorization header")
+	InvalidAuthHeader   = errors.New("invalid Authorization header")
+	UnsupportedAuthType = errors.New("invalid or unsupported Authorization header (expected 'Bearer')")
+	Unauthorized        = errors.New("you are not authorized to access this resource")
 )
 
 func Authorized(ctx context.Context, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
@@ -34,7 +35,7 @@ func Authorized(ctx context.Context, jwtVerificationKey []byte) (*AuthorizedClai
 	} else if len(auth[0]) == 0 {
 		return nil, MissingAuthHeader
 	} else if !strings.HasPrefix(auth[0], "Bearer ") {
-		return nil, InvalidAuthHeader
+		return nil, UnsupportedAuthType
 	}
 
 	value := strings.TrimPrefix(auth[0], "Bearer ")

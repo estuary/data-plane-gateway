@@ -32,7 +32,7 @@ go install .
 
 The data plane gateway always requires TLS. There is no option for running without TLS.
 The following command launches the Gateway on port 28318. This port will be used for serving REST and GRPC handlers, as well as for proxying connections to running containers.
-The gateway will also listen on a non-tls port, but on this port it will only serve the health check endpoint and the ACME challenge responses (if automatic cert management is enabled).
+The gateway will also listen on a non-tls port, but on this port it will only serve the health check and metrics endpoints.
 
 To run the Gateway:
 
