@@ -14,6 +14,8 @@ RUN go mod download
 # Build the gateway.
 COPY *.go ./
 COPY gen ./gen
+COPY auth ./auth
+COPY proxy ./proxy
 RUN go build .
 
 # Generate a self-signed certificate to allow the server to use TLS
