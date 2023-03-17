@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -25,12 +26,13 @@ import (
 )
 
 var (
-	logLevel           = flag.String("log.level", "info", "Verbosity of logging")
-	brokerAddr         = flag.String("broker-address", "localhost:8080", "Target broker address")
-	consumerAddr       = flag.String("consumer-address", "localhost:9000", "Target consumer address")
-	inferenceAddr      = flag.String("inference-address", "localhost:9090", "Target schema inference service address")
-	corsOrigin         = flag.String("cors-origin", "*", "CORS Origin")
-	jwtVerificationKey = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
+	logLevel            = flag.String("log.level", "info", "Verbosity of logging")
+	brokerAddr          = flag.String("broker-address", "localhost:8080", "Target broker address")
+	consumerAddr        = flag.String("consumer-address", "localhost:9000", "Target consumer address")
+	inferenceAddr       = flag.String("inference-address", "localhost:9090", "Target schema inference service address")
+	corsOrigin          = flag.String("cors-origin", "*", "CORS Origin")
+	controlPlaneAuthUrl = flag.String("control-plane-auth-url", "", "base url to use for redirecting unauthorized requests")
+	jwtVerificationKey  = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
 	// Plain port is meant to be exposed to the public internet. It serves the REST endpoints, so that
 	// it's usable for local development without shenanigans for dealing with the self-signed cert.
 	// It also serves the ACME challenges for provisioning TLS certs. It does not serve gRPC.
@@ -117,7 +119,15 @@ func main() {
 	publicMux.Handle("/infer_schema", schemaInferenceHandler)
 	publicMux.Handle("/", restHandler)
 
-	proxyServer, tappedListener, err := proxy.NewTlsProxyServer(*hostname, uint16(tlsPortNum), certificates, shardServer.shardClient, []byte(*jwtVerificationKey))
+	if *controlPlaneAuthUrl == "" {
+		log.Fatalf("missing required argument control-plane-auth-url")
+	}
+	cpAuthUrl, err := url.Parse(*controlPlaneAuthUrl)
+	if err != nil {
+		log.Fatalf("invalid control-plane-auth-url: %v", err)
+	}
+
+	proxyServer, tappedListener, err := proxy.NewTlsProxyServer(*hostname, uint16(tlsPortNum), certificates, shardServer.shardClient, *cpAuthUrl, []byte(*jwtVerificationKey))
 
 	// compose both http and grpc into a single handler, that dispatches each request based on
 	// the content-type. It's important that we do this on a per-request basis instead of a

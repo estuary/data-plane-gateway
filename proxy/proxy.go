@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,13 +86,13 @@ type ProxyServer struct {
 // subdomains of `hostname` will be proxied to a container of the shard that's indicated by the subdomain labels.
 // Connections that are made to `hostname` exactly will be given to the returned `TappedListener` to be handled by
 // another server.
-func NewTlsProxyServer(hostname string, port uint16, tlsCerts []tls.Certificate, shardClient pc.ShardClient, jwtVerificationKey []byte) (*ProxyServer, *TappedListener, error) {
+func NewTlsProxyServer(hostname string, port uint16, tlsCerts []tls.Certificate, shardClient pc.ShardClient, controlPlaneAuthUrl url.URL, jwtVerificationKey []byte) (*ProxyServer, *TappedListener, error) {
 	var tcpListener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, nil, err
 	}
 	var closeCh = make(chan struct{})
-	var proxyHandler = newHandler(hostname, shardClient, jwtVerificationKey)
+	var proxyHandler = newHandler(hostname, shardClient, controlPlaneAuthUrl, jwtVerificationKey)
 	var tlsConfig = getTlsConfig(tlsCerts, proxyHandler)
 
 	var tlsListener = tls.NewListener(tcpListener, tlsConfig)
@@ -228,25 +229,30 @@ func getTlsConfig(certs []tls.Certificate, proxyHandler *ProxyHandler) *tls.Conf
 
 // ProxyHandler proxies TCP traffic to connector containers, though a gRPC service in the reactor.
 type ProxyHandler struct {
-	hostname          string
-	proxyDomainSuffix string
-	mu                *sync.Mutex
+	hostname            string
+	proxyDomainSuffix   string
+	controlPlaneAuthUrl url.URL
+	mu                  *sync.Mutex
+	redirectHandler     *authRedirectHandler
 
 	shardResolutionCache *lru.Cache[string, *resolvedShard]
 	shardClient          pc.ShardClient
 	jwtVerificationKey   []byte
 }
 
-func newHandler(gatewayHostname string, shardClient pc.ShardClient, jwtVerificationKey []byte) *ProxyHandler {
+func newHandler(gatewayHostname string, shardClient pc.ShardClient, controlPlaneAuthUrl url.URL, jwtVerificationKey []byte) *ProxyHandler {
 	var cache, err = lru.New[string, *resolvedShard](SHARD_RESOLUTION_CACHE_MAX_SIZE)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize shardResolutionCache: %v", err))
 	}
+
 	return &ProxyHandler{
 		hostname:             gatewayHostname,
 		proxyDomainSuffix:    "." + gatewayHostname,
 		mu:                   &sync.Mutex{},
 		shardResolutionCache: cache,
+		redirectHandler:      newRedirectHandler(gatewayHostname),
+		controlPlaneAuthUrl:  controlPlaneAuthUrl,
 		shardClient:          shardClient,
 		jwtVerificationKey:   jwtVerificationKey,
 	}

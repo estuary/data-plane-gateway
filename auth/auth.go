@@ -15,9 +15,14 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// AuthCookieName is the name of the cookie that we use for passing the JWT for interactive logins.
+// It's name begins with '__Host-' in order to opt in to some additional security restrictions.
+// See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#cookie_prefixes
+const AuthCookieName = "__Host-flow_auth"
+
 var (
-	MissingAuthHeader   = errors.New("missing or empty Authorization header")
-	InvalidAuthHeader   = errors.New("invalid Authorization header")
+	MissingAuthToken    = errors.New("missing or empty authentication token")
+	InvalidAuthToken    = errors.New("invalid authentication token")
 	UnsupportedAuthType = errors.New("invalid or unsupported Authorization header (expected 'Bearer')")
 	Unauthorized        = errors.New("you are not authorized to access this resource")
 )
@@ -31,39 +36,55 @@ func Authorized(ctx context.Context, jwtVerificationKey []byte) (*AuthorizedClai
 
 	auth := md.Get("authorization")
 	if len(auth) == 0 {
-		return nil, MissingAuthHeader
+		return nil, MissingAuthToken
 	} else if len(auth[0]) == 0 {
-		return nil, MissingAuthHeader
+		return nil, MissingAuthToken
 	} else if !strings.HasPrefix(auth[0], "Bearer ") {
 		return nil, UnsupportedAuthType
 	}
 
 	value := strings.TrimPrefix(auth[0], "Bearer ")
 
-	return decodeJwt(value, jwtVerificationKey)
+	var claims, err = decodeJwt(value, jwtVerificationKey)
+	if err != nil {
+		return nil, InvalidAuthToken
+	}
+	return claims, nil
 }
 
 func AuthorizedReq(req *http.Request, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
+	var tokenValue string
+	var authSource string
 	auth := req.Header.Get("authorization")
-	if len(auth) == 0 {
-		return nil, MissingAuthHeader
-	} else if !strings.HasPrefix(auth, "Bearer ") {
-		return nil, InvalidAuthHeader
+	if auth != "" {
+		if !strings.HasPrefix(auth, "Bearer ") {
+			return nil, InvalidAuthToken
+		}
+		tokenValue = strings.TrimPrefix(auth, "Bearer ")
+		authSource = "Authorization"
+	}
+	var cookie, err = req.Cookie(AuthCookieName)
+	if tokenValue == "" && err == http.ErrNoCookie {
+		return nil, MissingAuthToken
+	} else if tokenValue == "" && err != nil {
+		return nil, InvalidAuthToken
+	} else if cookie != nil {
+		tokenValue = cookie.Value
+		authSource = "Cookie"
 	}
 
-	value := strings.TrimPrefix(auth, "Bearer ")
-
-	var claims, err = decodeJwt(value, jwtVerificationKey)
+	claims, err := decodeJwt(tokenValue, jwtVerificationKey)
 	// The error returned from decodeJwt may contain helpful details, but we don't want to provide all those details
 	// to the client. Instead we log the detailed error here and return a simpler error. This also makes it easier to
 	// match errors as part of error handling.
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
-			"host":  req.Host,
-			"URI":   req.RequestURI,
-			"error": err,
-		}).Debug("invalid Authorization header")
-		return nil, InvalidAuthHeader
+			"host":       req.Host,
+			"URI":        req.RequestURI,
+			"error":      err,
+			"authSource": authSource,
+		}).Debug("invalid jwt")
+		return nil, InvalidAuthToken
 	}
 	return claims, nil
 }
