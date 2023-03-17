@@ -9,17 +9,17 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/net/http2"
 
 	"github.com/estuary/data-plane-gateway/auth"
 	"github.com/estuary/flow/go/labels"
 	log "github.com/sirupsen/logrus"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpadaptor"
+	"golang.org/x/net/http2"
 )
 
 func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, proxyConn *ProxyConnection, portConfig *labels.PortConfig) error {
@@ -57,7 +57,7 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 	}
 
 	var handlerFunc = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// If the port is private, then require that each request has an Authorization header that permits it to
+		// If the port is private, then require that each request has a JWT that permits it to
 		// access the task. We don't check the Authorization header if the port is public, since the header value
 		// might be meant to be interpreted by the connector itself.
 		if !isPublicPort {
@@ -65,9 +65,46 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 			if authErr == nil {
 				authErr = auth.EnforcePrefix(claims, proxyConn.taskName)
 			}
-			if authErr != nil {
+			var acceptHeader = req.Header.Get("accept")
+
+			// The port is private and the request is unauthorized.
+			// We might redirect the user to the dashboard so that they can authorize the request and get redirected back here.
+			// Or, this request might be the _result_ of a successful redirect back from that endpoint, in which case we'll
+			// redirect _again_, with a `Set-Cookie` header to make sure that the next request is authorized. But this type
+			// of redirection only makes sense if this request originated from an interactive browser session. For example,
+			// it wouldn't make sense to respond with a redirect to dashboard if this we a JSON API request. In that case, we'd
+			// prefer to simply return a JSON response with the error message. Checking if the accept header contains "html"
+			// just seemed like a cheap and easy way to determine if a redirect is likely to be appreciated, since actually parsing
+			// the accept header is pretty complicated.
+			if authErr != nil && strings.Contains(acceptHeader, "html") {
+				// Note that we only match this path if the request doesn't already contain a valid auth token. Technically, a
+				// connector could itself expose an `/auth-redirect` endpoint, and that would work as long as the request can be authorized.
+				if req.URL.Path == "/auth-redirect" {
+					h.redirectHandler.ServeHTTP(w, req)
+					return
+				} else {
+					// This is just a regular request that's unauthorized, so we'll handle this by redirecting to the dashboard.
+					var origUrl = "https://" + req.Host + req.URL.Path
+					var redirectTarget = h.controlPlaneAuthUrl.JoinPath("/data-plane-auth-req")
+					var query = &url.Values{}
+					query.Add("orig_url", origUrl)
+					query.Add("prefix", proxyConn.taskName)
+					redirectTarget.RawQuery = query.Encode()
+
+					var targetUrl = redirectTarget.String()
+					log.WithFields(log.Fields{
+						"error":          authErr,
+						"host":           req.Host,
+						"clientAddr":     req.RemoteAddr,
+						"reqUrl":         origUrl,
+						"redirectTarget": targetUrl,
+					}).Info("HTTP proxy request to private port is unauthorized")
+
+					http.Redirect(w, req, targetUrl, 307)
+					return
+				}
+			} else if authErr != nil {
 				handleHttpError(authErr, w, req)
-				return
 			}
 		}
 		proxy.ServeHTTP(w, req)
@@ -185,9 +222,9 @@ func handleHttpError(err error, w http.ResponseWriter, r *http.Request) {
 func httpStatus(err error) int {
 	if err == NoMatchingShard {
 		return 404
-	} else if err == auth.InvalidAuthHeader || err == auth.UnsupportedAuthType {
+	} else if err == auth.InvalidAuthToken || err == auth.UnsupportedAuthType {
 		return 400
-	} else if err == auth.MissingAuthHeader {
+	} else if err == auth.MissingAuthToken {
 		return 401
 	} else if err == auth.Unauthorized {
 		// In this case, the user provided a valid auth token, which just didn't authorize them to access the shard. We return a 403
