@@ -12,7 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 	pb "go.gazette.dev/core/broker/protocol"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // AuthCookieName is the name of the cookie that we use for passing the JWT for interactive logins.
@@ -47,7 +49,7 @@ func Authorized(ctx context.Context, jwtVerificationKey []byte) (*AuthorizedClai
 
 	var claims, err = decodeJwt(value, jwtVerificationKey)
 	if err != nil {
-		return nil, InvalidAuthToken
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	return claims, nil
 }
