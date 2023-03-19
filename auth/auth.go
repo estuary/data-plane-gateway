@@ -29,7 +29,12 @@ var (
 	Unauthorized        = errors.New("you are not authorized to access this resource")
 )
 
-func Authorized(ctx context.Context, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
+// AuthenticateGrpcReq parses a JWT from the request context metadata, or returns an error if
+// the request does not contain a valid auth token. This returns an error if the token exists
+// but is expired, not signed by the provided `jwtVerificationKey`, or is structurally invalid in
+// some other way. This does _not_ perform any sort of authorization checks, which must be handled
+// separately.
+func AuthenticateGrpcReq(ctx context.Context, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 
 	if !ok {
@@ -54,7 +59,15 @@ func Authorized(ctx context.Context, jwtVerificationKey []byte) (*AuthorizedClai
 	return claims, nil
 }
 
-func AuthorizedReq(req *http.Request, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
+// AuthenticateHttpReq parses a JWT from the request headers, or returns an error if
+// the request does not contain a valid auth token. This returns an error if the token exists
+// but is expired, not signed by the provided `jwtVerificationKey`, or is structurally invalid in
+// some other way. This does _not_ perform any sort of authorization checks, which must be handled
+// separately.
+// The auth token may be provided in one of the following ways:
+// - A `Bearer` token in the `Authorization` header
+// - A `Cookie` called `__Host-flow_auth`
+func AuthenticateHttpReq(req *http.Request, jwtVerificationKey []byte) (*AuthorizedClaims, error) {
 	var tokenValue string
 	var authSource string
 	auth := req.Header.Get("authorization")

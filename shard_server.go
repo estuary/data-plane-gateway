@@ -44,7 +44,7 @@ func newShardClient(ctx context.Context, addr string) (pc.ShardClient, error) {
 
 // List implements protocol.ShardServer
 func (s *ShardAuthServer) List(ctx context.Context, req *pc.ListRequest) (*pc.ListResponse, error) {
-	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
+	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (s *ShardAuthServer) List(ctx context.Context, req *pc.ListRequest) (*pc.Li
 
 // Stat implements protocol.ShardServer
 func (s *ShardAuthServer) Stat(ctx context.Context, req *pc.StatRequest) (*pc.StatResponse, error) {
-	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
+	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return nil, err
 	}
