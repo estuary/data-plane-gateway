@@ -42,7 +42,7 @@ func newJournalClient(ctx context.Context, addr string) (pb.JournalClient, error
 
 // List implements protocol.JournalServer
 func (s *JournalAuthServer) List(ctx context.Context, req *pb.ListRequest) (*pb.ListResponse, error) {
-	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
+	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (s *JournalAuthServer) List(ctx context.Context, req *pb.ListRequest) (*pb.
 
 // ListFragments implements protocol.JournalServer
 func (s *JournalAuthServer) ListFragments(ctx context.Context, req *pb.FragmentsRequest) (*pb.FragmentsResponse, error) {
-	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
+	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (s *JournalAuthServer) ListFragments(ctx context.Context, req *pb.Fragments
 func (s *JournalAuthServer) Read(readReq *pb.ReadRequest, readServer pb.Journal_ReadServer) error {
 	ctx := readServer.Context()
 
-	claims, err := auth.Authorized(ctx, s.jwtVerificationKey)
+	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
 	if err != nil {
 		return err
 	}

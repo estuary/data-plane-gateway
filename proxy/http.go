@@ -61,7 +61,7 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 		// access the task. We don't check the Authorization header if the port is public, since the header value
 		// might be meant to be interpreted by the connector itself.
 		if !isPublicPort {
-			var claims, authErr = auth.AuthorizedReq(req, h.jwtVerificationKey)
+			var claims, authErr = auth.AuthenticateHttpReq(req, h.jwtVerificationKey)
 			if authErr == nil {
 				authErr = auth.EnforcePrefix(claims, proxyConn.taskName)
 			}

@@ -25,7 +25,7 @@ var schemaInferenceHandler = http.HandlerFunc(func(writer http.ResponseWriter, r
 	// Pull JWT from authz header
 	// See auth.go:authorized()
 	// decodeJWT(that bearer token) -> AuthorizedClaims
-	claims, err := auth.AuthorizedReq(req, []byte(*jwtVerificationKey))
+	claims, err := auth.AuthenticateHttpReq(req, []byte(*jwtVerificationKey))
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusUnauthorized)
 		return
