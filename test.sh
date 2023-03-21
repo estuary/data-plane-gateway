@@ -94,6 +94,7 @@ ${GATEWAY_BIN} \
   --consumer-address=${CONSUMER_ADDRESS} \
   --tls-certificate=${TESTDIR}/tls-self-signed-cert.pem \
   --tls-private-key=${TESTDIR}/tls-private-key.pem \
+  --control-plane-auth-url=http://localhost:3000/ \
   &
 GATEWAY_PID=$!
 
