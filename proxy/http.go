@@ -52,6 +52,20 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 			if _, ok := req.Header["User-Agent"]; !ok {
 				// explicitly disable User-Agent so it's not set to default value
 				req.Header.Set("User-Agent", "")
+
+			}
+			// if the port is private, then scrub the authentication token from the requests.
+			if !isPublicPort {
+				req.Header.Del("Authorization")
+				// There's no `DeleteCookie` function, so we parse them, delete them all, and
+				// add them back in while filtering out the flow_auth cookie.
+				var cookies = req.Cookies()
+				req.Header.Del("Cookie")
+				for _, cookie := range cookies {
+					if cookie.Name != auth.AuthCookieName {
+						req.AddCookie(cookie)
+					}
+				}
 			}
 		},
 	}
