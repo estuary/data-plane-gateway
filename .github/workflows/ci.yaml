@@ -37,7 +37,7 @@ jobs:
 
       - uses: denoland/setup-deno@v1
         with:
-          deno-version: v1.22.2
+          deno-version: v1.29.1
 
       - name: Fetch Flow
         run: |
