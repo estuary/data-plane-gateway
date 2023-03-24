@@ -49,7 +49,8 @@ func (h *authRedirectHandler) ServeHTTP(w http.ResponseWriter, req *http.Request
 	}
 
 	// Check that the hostname of the original url is actually a subdomain of DPG's hostname.
-	// This isn't technically neccessary for security because we use a
+	// This isn't technically neccessary for security because the cookie is scoped to a single
+	// origin. But it makes sense to fail fast if we can.
 	if !strings.HasSuffix(origUrlParsed.Hostname(), h.dpgDomainSuffix) {
 		renderAuthError(fmt.Errorf("invalid orig_url parameter: hostname '%s' is not a subdomain of %s", origUrlParsed.Hostname(), h.dpgDomainSuffix), w, req)
 		return
