@@ -545,7 +545,7 @@ func proxyTcp(ctx context.Context, clientConn *tls.Conn, proxyConn *ProxyConnect
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
-		if outgoingBytes, e := io.Copy(clientConn, proxyConn); !errors.Is(e, io.EOF) {
+		if outgoingBytes, e := io.Copy(clientConn, proxyConn); e != nil {
 			log.WithFields(log.Fields{
 				"hostname":      proxyConn.hostname,
 				"error":         e,
@@ -563,7 +563,7 @@ func proxyTcp(ctx context.Context, clientConn *tls.Conn, proxyConn *ProxyConnect
 
 	grp.Go(func() error {
 		defer proxyConn.Close()
-		if incomingBytes, e := io.Copy(proxyConn, clientConn); !errors.Is(e, io.EOF) {
+		if incomingBytes, e := io.Copy(proxyConn, clientConn); e != nil {
 			log.WithFields(log.Fields{
 				"hostname":      proxyConn.hostname,
 				"error":         e,
