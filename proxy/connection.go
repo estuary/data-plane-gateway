@@ -83,7 +83,7 @@ func (pc *ProxyConnection) Close() error {
 	log.WithFields(log.Fields{
 		"hostname": pc.hostname,
 		"error":    err,
-	}).Debug("closed upstream connection")
+	}).Debug("closed upstream proxy client")
 	return err
 }
 
