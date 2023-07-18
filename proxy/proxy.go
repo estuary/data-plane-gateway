@@ -469,12 +469,16 @@ func (h *ProxyHandler) handleProxyConnection(ctx context.Context, conn *tls.Conn
 			"error":      err,
 			"sni":        sni,
 			"clientAddr": clientAddr,
+			"proto":      state.NegotiatedProtocol,
+			"shard":      shardID,
 		}).Warn("failed to proxy connection")
 	} else {
 		ProxyConnectionsClosedCounter.WithLabelValues(shardID, portStr, "ok").Inc()
 		log.WithFields(log.Fields{
 			"sni":        sni,
 			"clientAddr": clientAddr,
+			"proto":      state.NegotiatedProtocol,
+			"shard":      shardID,
 		}).Info("finished proxy connection")
 	}
 }
@@ -485,14 +489,16 @@ func (h *ProxyHandler) proxyConnection(ctx context.Context, conn *tls.Conn, sni 
 	reactorAddr := endpoint.GRPCAddr()
 	log.WithFields(log.Fields{
 		"sni":         sni,
+		"clientAddr":  clientAddr,
 		"reactorAddr": reactorAddr,
-	}).Info("starting proxy connection")
+	}).Debug("starting proxy connection")
 	// Ideally we'd reuse an existing connection that's cached per reactor.
 	// I don't think that's necessary at this stage, though.
 	proxyConn, err := grpc.DialContext(ctx, reactorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("connecting to reactor: %w", err)
 	}
+	defer proxyConn.Close()
 	var proxyClient = pf.NewNetworkProxyClient(proxyConn)
 
 	proxyStreaming, err := proxyClient.Proxy(ctx)
@@ -527,11 +533,14 @@ func (h *ProxyHandler) proxyConnection(ctx context.Context, conn *tls.Conn, sni 
 		client:     proxyStreaming,
 	}
 	var negotiatedProto = conn.ConnectionState().NegotiatedProtocol
+
+	// This logging is a bit too verbose, but too helpful to be removed just yet.
 	log.WithFields(log.Fields{
-		"sni":        sni,
-		"clientAddr": clientAddr,
-		"proto":      negotiatedProto,
-	}).Debug("starting to proxy connection data")
+		"sni":         sni,
+		"clientAddr":  clientAddr,
+		"reactorAddr": reactorAddr,
+		"proto":       negotiatedProto,
+	}).Info("starting to proxy connection data")
 
 	// We're finally ready to copy the data between the connection and our grpc streaming rpc.
 	if isHttp(negotiatedProto) {
@@ -544,6 +553,7 @@ func (h *ProxyHandler) proxyConnection(ctx context.Context, conn *tls.Conn, sni 
 func proxyTcp(ctx context.Context, clientConn *tls.Conn, proxyConn *ProxyConnection) error {
 
 	grp, ctx := errgroup.WithContext(ctx)
+	// Task that copies data from the client connection to the reactor.
 	grp.Go(func() error {
 		if outgoingBytes, e := io.Copy(clientConn, proxyConn); e != nil {
 			log.WithFields(log.Fields{
@@ -561,6 +571,7 @@ func proxyTcp(ctx context.Context, clientConn *tls.Conn, proxyConn *ProxyConnect
 		}
 	})
 
+	// Task that copies data from the reactor to the client
 	grp.Go(func() error {
 		defer proxyConn.Close()
 		if incomingBytes, e := io.Copy(proxyConn, clientConn); e != nil {
