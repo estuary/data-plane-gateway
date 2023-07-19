@@ -1,9 +1,5 @@
-properties:
-  count:
-    type: integer
-  message:
-    type: string
-required:
-  - count
-  - message
 type: object
+properties:
+  ts: { type: string, format: date-time }
+  message: { type: string }
+required: [ts, message]

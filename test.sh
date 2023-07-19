@@ -64,6 +64,9 @@ export GATEWAY_PORT=28318
 export BUILD_ID=test-build-id
 export CATALOG_SOURCE="test/acmeCo/source-hello-world.flow.yaml"
 
+# This is needed in order for docker run commands to work on ARM macs.
+export DOCKER_DEFAULT_PLATFORM="linux/amd64"
+
 log "TESTDIR setup: ${TESTDIR}"
 
 # Start an empty local data plane within our TESTDIR as a background job.
@@ -110,7 +113,7 @@ trap "kill -s SIGTERM ${DATA_PLANE_PID} \
 
 # Build the catalog.
 ${FLOW_BIN} api build \
-  --directory=${TESTDIR}/builds \
+  --build-db=${TESTDIR}/builds/${BUILD_ID} \
   --build-id=${BUILD_ID} \
   --source=${CATALOG_SOURCE} || bail "Build failed."
 

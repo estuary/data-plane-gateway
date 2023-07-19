@@ -4,36 +4,36 @@
       _meta: {
         uuid: '[MASKED string]',
       },
-      count: 1,
       message: 'Hello #1',
+      ts: '[MASKED string]',
     },
     {
       _meta: {
         uuid: '[MASKED string]',
       },
-      count: 2,
       message: 'Hello #2',
+      ts: '[MASKED string]',
     },
     {
       _meta: {
         uuid: '[MASKED string]',
       },
-      count: 3,
       message: 'Hello #3',
+      ts: '[MASKED string]',
     },
     {
       _meta: {
         uuid: '[MASKED string]',
       },
-      count: 4,
       message: 'Hello #4',
+      ts: '[MASKED string]',
     },
     {
       _meta: {
         uuid: '[MASKED string]',
       },
-      count: 5,
       message: 'Hello #5',
+      ts: '[MASKED string]',
     },
   ],
   'JournalClient.read test': [

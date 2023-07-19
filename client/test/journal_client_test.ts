@@ -137,7 +137,7 @@ snapshotTest("JournalClient.read content test", async ({ assertSnapshot }) => {
 
   let filtered_results = results.filter(r=>!(r._meta as any).ack).slice(0,5)
 
-  const masks = ["/*/_meta/uuid"];
+  const masks = ["/*/_meta/uuid", "/*/ts"];
   assertSnapshot(filtered_results, masks);
 });
 

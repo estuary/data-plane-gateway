@@ -6,7 +6,7 @@ storageMappings:
 collections:
   acmeCo/greetings:
     schema: greetings.schema.yaml
-    key: [/count]
+    key: [/ts]
 captures:
   acmeCo/source-hello-world:
     endpoint:
@@ -15,6 +15,6 @@ captures:
         config: source-hello-world.config.yaml
     bindings:
       - resource:
-          stream: greetings
-          syncMode: incremental
+          name: greetings
+          prefix: 'Hello #{}'
         target: acmeCo/greetings
