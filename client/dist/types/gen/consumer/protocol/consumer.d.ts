@@ -92,7 +92,7 @@ Shards not having recovery logs immediately transition to STANDBY.
  - PRIMARY: The replica is actively serving as primary.
  - FAILED: The replica has encountered an unrecoverable error.
 */
-export declare type ReplicaStatusCode = 'IDLE' | 'BACKFILL' | 'STANDBY' | 'PRIMARY' | 'FAILED';
+export declare type ReplicaStatusCode = "IDLE" | "BACKFILL" | "STANDBY" | "PRIMARY" | "FAILED";
 /**
 * Change defines an insertion, update, or deletion to be applied to the set
 of ShardSpecs. Exactly one of |upsert| or |delete| must be set.
@@ -425,7 +425,7 @@ requested operation.
 For example, a Stat RPC will return SHARD_STOPPED if the StatRequest
 cannot be satisfied.
 */
-export declare type ConsumerStatus = 'OK' | 'SHARD_NOT_FOUND' | 'NO_SHARD_PRIMARY' | 'NOT_SHARD_PRIMARY' | 'ETCD_TRANSACTION_FAILED' | 'SHARD_STOPPED';
+export declare type ConsumerStatus = "OK" | "SHARD_NOT_FOUND" | "NO_SHARD_PRIMARY" | "NOT_SHARD_PRIMARY" | "ETCD_TRANSACTION_FAILED" | "SHARD_STOPPED";
 export interface ConsumerUnassignResponse {
     /** Status of the Unassign RPC. */
     status?: ConsumerStatus;

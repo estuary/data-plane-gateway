@@ -165,7 +165,7 @@ improvements, it is an advanced configuration and the "Content-Encoding"
 header handling can be subtle and sometimes confusing. It uses the default
 suffix ".gzod".
 */
-export declare type ProtocolCompressionCodec = 'INVALID' | 'NONE' | 'GZIP' | 'ZSTANDARD' | 'SNAPPY' | 'GZIP_OFFLOAD_DECOMPRESSION';
+export declare type ProtocolCompressionCodec = "INVALID" | "NONE" | "GZIP" | "ZSTANDARD" | "SNAPPY" | "GZIP_OFFLOAD_DECOMPRESSION";
 /**
 * Fragment is a content-addressed description of a contiguous Journal span,
 defined by the [begin, end) offset range covered by the Fragment and the
@@ -608,7 +608,7 @@ too many broker or Etcd failures.
  - REGISTER_MISMATCH: The Append is refused because a registers selector was provided with the
 request, but it was not matched by current register values of the journal.
 */
-export declare type ProtocolStatus = 'OK' | 'JOURNAL_NOT_FOUND' | 'NO_JOURNAL_PRIMARY_BROKER' | 'NOT_JOURNAL_PRIMARY_BROKER' | 'NOT_JOURNAL_BROKER' | 'INSUFFICIENT_JOURNAL_BROKERS' | 'OFFSET_NOT_YET_AVAILABLE' | 'WRONG_ROUTE' | 'PROPOSAL_MISMATCH' | 'ETCD_TRANSACTION_FAILED' | 'NOT_ALLOWED' | 'WRONG_APPEND_OFFSET' | 'INDEX_HAS_GREATER_OFFSET' | 'REGISTER_MISMATCH';
+export declare type ProtocolStatus = "OK" | "JOURNAL_NOT_FOUND" | "NO_JOURNAL_PRIMARY_BROKER" | "NOT_JOURNAL_PRIMARY_BROKER" | "NOT_JOURNAL_BROKER" | "INSUFFICIENT_JOURNAL_BROKERS" | "OFFSET_NOT_YET_AVAILABLE" | "WRONG_ROUTE" | "PROPOSAL_MISMATCH" | "ETCD_TRANSACTION_FAILED" | "NOT_ALLOWED" | "WRONG_APPEND_OFFSET" | "INDEX_HAS_GREATER_OFFSET" | "REGISTER_MISMATCH";
 export interface RuntimeError {
     error?: string;
     /** @format int32 */
