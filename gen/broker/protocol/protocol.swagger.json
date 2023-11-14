@@ -504,6 +504,11 @@
           "type": "string",
           "format": "int64",
           "description": "Offset to read through. If zero, then the read end offset is unconstrained."
+        },
+        "beginModTime": {
+          "type": "string",
+          "format": "int64",
+          "description": "BeginModTime is an optional inclusive lower bound on the modification\ntimestamps of fragments read from the backing store, represented as\nseconds since the epoch. The request Offset will be advanced as-needed\nto skip persisted Fragments having a modication time before the bound."
         }
       },
       "description": "ReadRequest is the unary request message of the broker Read RPC."

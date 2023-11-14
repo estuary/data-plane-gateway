@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/estuary/flow v0.1.9-0.20230303181027-f65a9d7f1a89
 	github.com/gogo/gateway v1.1.0
-	github.com/golang-jwt/jwt/v4 v4.4.1
+	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
@@ -15,7 +15,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/urfave/negroni v1.0.0
 	github.com/valyala/fasthttp v1.48.0
-	go.gazette.dev/core v0.89.1-0.20230106205712-a2d374cdd6be
+	go.gazette.dev/core v0.89.1-0.20231012132739-dfed675b7fd1
 	golang.org/x/net v0.8.0
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
 	google.golang.org/grpc v1.53.0

@@ -63,7 +63,7 @@ sed -i -E "s# (New[a-zA-Z0-9_]*Client\\()# ${alias}.\\1#g" "${gwfile}"
 go fmt "${gwfile}"
 
 # Generate low-level typescript clients from swagger.
-npx swagger-typescript-api \
+npx swagger-typescript-api@10.0.3 \
   -p gen/${SERVICE}/protocol/protocol.swagger.json \
   -o client/src/gen/${SERVICE}/protocol/ \
   -n ${SERVICE}.ts \
