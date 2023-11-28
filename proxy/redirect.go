@@ -61,6 +61,7 @@ func (h *authRedirectHandler) ServeHTTP(w http.ResponseWriter, req *http.Request
 		Value:    token,
 		Secure:   true,
 		HttpOnly: true,
+		Path:     "/",
 	}
 	http.SetCookie(w, cookie)
 	http.Redirect(w, req, origUrl, 307)
