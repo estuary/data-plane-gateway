@@ -1,6 +1,6 @@
 # Build Stage
 ################################################################################
-FROM golang:1.19-buster as builder
+FROM golang as builder
 
 WORKDIR /builder
 
@@ -30,7 +30,7 @@ FROM busybox:1.34-musl as busybox
 
 # Runtime Stage
 ################################################################################
-FROM gcr.io/distroless/base-debian10
+FROM gcr.io/distroless/base-debian11
 
 COPY --from=busybox /bin/sh /bin/sh
 
