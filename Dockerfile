@@ -30,7 +30,7 @@ FROM busybox:1.34-musl as busybox
 
 # Runtime Stage
 ################################################################################
-FROM gcr.io/distroless/base-debian11
+FROM gcr.io/distroless/base-debian12
 
 COPY --from=busybox /bin/sh /bin/sh
 
@@ -44,5 +44,8 @@ COPY --from=builder --chown=nonroot /builder/tls-cert.pem ./
 
 # Avoid running the data-plane-gateway as root.
 USER nonroot:nonroot
+
+# Ensure data-plane-gateway can run on this runtime image.
+RUN ./data-plane-gateway --help
 
 ENTRYPOINT ["/app/data-plane-gateway"]
