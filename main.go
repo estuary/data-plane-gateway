@@ -30,6 +30,7 @@ var (
 	brokerAddr          = flag.String("broker-address", "localhost:8080", "Target broker address")
 	consumerAddr        = flag.String("consumer-address", "localhost:9000", "Target consumer address")
 	inferenceAddr       = flag.String("inference-address", "localhost:9090", "Target schema inference service address")
+	previewAddr         = flag.String("preview-address", "localhost:8098", "Target derivation preview service address")
 	corsOrigin          = flag.String("cors-origin", "*", "CORS Origin")
 	controlPlaneAuthUrl = flag.String("control-plane-auth-url", "", "base url to use for redirecting unauthorized requests")
 	jwtVerificationKey  = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
@@ -112,11 +113,13 @@ func main() {
 
 	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
 	schemaInferenceHandler := NewSchemaInferenceServer(ctx)
+	derivationPreviewHandler := NewDerivationPreviewServer(ctx)
 
 	// These routes will be exposed to the public internet and used for handling both http and https requests.
 	publicMux := http.NewServeMux()
 	publicMux.Handle("/healthz", healthHandler)
 	publicMux.Handle("/infer_schema", schemaInferenceHandler)
+	publicMux.Handle("/derivation_preview", derivationPreviewHandler)
 	publicMux.Handle("/", restHandler)
 
 	if *controlPlaneAuthUrl == "" {
