@@ -42,7 +42,7 @@ func (h *ProxyHandler) proxyHttp(ctx context.Context, clientConn *tls.Conn, prox
 				"shardID":    proxyConn.shardID,
 				"error":      err,
 				"URI":        req.RequestURI,
-			}).Error("proxy error")
+			}).Debug("proxy error")
 			handleHttpError(err, w, req)
 		},
 
@@ -229,7 +229,7 @@ func handleHttpError(err error, w http.ResponseWriter, r *http.Request) {
 		log.WithFields(log.Fields{
 			"origError":     err.Error(),
 			"templateError": writeErr.Error(),
-		}).Warn("failed to write error response body")
+		}).Debug("failed to write error response body")
 	}
 }
 

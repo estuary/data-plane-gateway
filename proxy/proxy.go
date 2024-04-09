@@ -149,7 +149,7 @@ func (ps *ProxyServer) Run() error {
 				log.WithFields(log.Fields{
 					"error":      hsErr,
 					"clientAddr": conn.RemoteAddr(),
-				}).Info("tls handshake error")
+				}).Debug("tls handshake error")
 				return
 			}
 			var state = conn.(*tls.Conn).ConnectionState()
@@ -471,7 +471,7 @@ func (h *ProxyHandler) handleProxyConnection(ctx context.Context, conn *tls.Conn
 			"clientAddr": clientAddr,
 			"proto":      state.NegotiatedProtocol,
 			"shard":      shardID,
-		}).Warn("failed to proxy connection")
+		}).Debug("failed to proxy connection")
 	} else {
 		ProxyConnectionsClosedCounter.WithLabelValues(shardID, portStr, "ok").Inc()
 		log.WithFields(log.Fields{
@@ -479,7 +479,7 @@ func (h *ProxyHandler) handleProxyConnection(ctx context.Context, conn *tls.Conn
 			"clientAddr": clientAddr,
 			"proto":      state.NegotiatedProtocol,
 			"shard":      shardID,
-		}).Info("finished proxy connection")
+		}).Debug("finished proxy connection")
 	}
 }
 
@@ -540,7 +540,7 @@ func (h *ProxyHandler) proxyConnection(ctx context.Context, conn *tls.Conn, sni 
 		"clientAddr":  clientAddr,
 		"reactorAddr": reactorAddr,
 		"proto":       negotiatedProto,
-	}).Info("starting to proxy connection data")
+	}).Debug("starting to proxy connection data")
 
 	// We're finally ready to copy the data between the connection and our grpc streaming rpc.
 	if isHttp(negotiatedProto) {
@@ -560,7 +560,7 @@ func proxyTcp(ctx context.Context, clientConn *tls.Conn, proxyConn *ProxyConnect
 				"hostname":      proxyConn.hostname,
 				"error":         e,
 				"outgoingBytes": outgoingBytes,
-			}).Warn("copyProxyResponseData completed with error")
+			}).Debug("copyProxyResponseData completed with error")
 			return e
 		} else {
 			log.WithFields(log.Fields{
@@ -579,7 +579,7 @@ func proxyTcp(ctx context.Context, clientConn *tls.Conn, proxyConn *ProxyConnect
 				"hostname":      proxyConn.hostname,
 				"error":         e,
 				"incomingBytes": incomingBytes,
-			}).Warn("copyProxyRequestData completed with error")
+			}).Debug("copyProxyRequestData completed with error")
 			return e
 		} else {
 			log.WithFields(log.Fields{
