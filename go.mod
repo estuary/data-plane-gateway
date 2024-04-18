@@ -1,6 +1,6 @@
 module github.com/estuary/data-plane-gateway
 
-go 1.22
+go 1.22.2
 
 require (
 	github.com/estuary/flow v0.1.9-0.20230303181027-f65a9d7f1a89
