@@ -63,6 +63,7 @@ export GATEWAY_PORT=28318
 
 export BUILD_ID=test-build-id
 export CATALOG_SOURCE="test/acmeCo/source-hello-world.flow.yaml"
+export CATALOG_SOURCE_ARABIC="test/acmeCo/arabic-source-hello-world.flow.yaml"
 
 # This is needed in order for docker run commands to work on ARM macs.
 export DOCKER_DEFAULT_PLATFORM="linux/amd64"
@@ -116,6 +117,12 @@ ${FLOW_BIN} api build \
   --build-db=${TESTDIR}/builds/${BUILD_ID} \
   --build-id=${BUILD_ID} \
   --source=${CATALOG_SOURCE} || bail "Build failed."
+
+# Build the catalog for some minor multi language testing
+${FLOW_BIN} api build \
+  --build-db=${TESTDIR}/builds/${BUILD_ID} \
+  --build-id=${BUILD_ID} \
+  --source=${CATALOG_SOURCE_ARABIC} || bail "Build failed."
 
 log "Build finished"
 
