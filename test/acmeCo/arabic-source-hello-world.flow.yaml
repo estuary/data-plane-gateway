@@ -1,8 +1,3 @@
-storageMappings:
-  "":
-    stores:
-      - provider: GCS
-        bucket: example
 collections:
   acmeCo/arabic-greetings:
     schema: greetings.schema.yaml

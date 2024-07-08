@@ -61,7 +61,7 @@ export BROKER_ADDRESS=unix://localhost${TESTDIR}/gazette.sock
 export CONSUMER_ADDRESS=unix://localhost${TESTDIR}/consumer.sock
 export GATEWAY_PORT=28318
 
-export BUILD_ID=test-build-id
+export BUILD_ID='0000000000000000'
 export CATALOG_SOURCE="test/acmeCo/source-hello-world.flow.yaml"
 export CATALOG_SOURCE_ARABIC="test/acmeCo/arabic-source-hello-world.flow.yaml"
 
