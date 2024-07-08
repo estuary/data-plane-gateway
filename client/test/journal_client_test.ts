@@ -11,41 +11,33 @@ import { JournalClient, parseJournalDocuments } from "../src/journal_client.ts";
 import { JournalSelector } from "../src/selector.ts";
 import { readStreamToEnd } from "../src/streams.ts";
 
-Deno.test("JournalClient.list collection selector test", async () => {
+snapshotTest("JournalClient.list collection selector test", async ({assertSnapshot}) => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
   const name = new JournalSelector().collection("acmeCo/greetings");
   const journals = (await client.list(name)).unwrap();
 
-  assertEquals(1, journals.length);
-  assertEquals("acmeCo/greetings/pivot=00", journals[0].name);
+  assertSnapshot(journals.map((j)=>j.name));
 });
 
-Deno.test("JournalClient.list name selector test", async () => {
+snapshotTest("JournalClient.list name selector test", async ({assertSnapshot}) => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
-  const name = new JournalSelector().name("acmeCo/greetings/pivot=00");
+  const name = new JournalSelector().name("acmeCo/greetings/00ffffffffffffff/pivot=00");
   const journals = (await client.list(name)).unwrap();
 
-  assertEquals(1, journals.length);
-  assertEquals("acmeCo/greetings/pivot=00", journals[0].name);
+  assertSnapshot(journals.map((j)=>j.name));
 });
 
-Deno.test("JournalClient.list prefix selector test", async () => {
+snapshotTest("JournalClient.list prefix selector test", async ({assertSnapshot}) => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
-  const expectedJournals = [
-    "ops.us-central1.v1/logs/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
-    "ops.us-central1.v1/stats/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
-  ];
-
   const prefixSelector = JournalSelector.prefix("ops.us-central1.v1/");
   const journals = (await client.list(prefixSelector)).unwrap();
 
-  assertEquals(2, journals.length);
-  assertEquals(expectedJournals, journals.map((j) => j.name).sort());
+  assertSnapshot(journals.map((j)=>j.name));
 });
 
-Deno.test("JournalClient.list exclusion selector test", async () => {
+snapshotTest("JournalClient.list exclusion selector test", async ({assertSnapshot}) => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
   const prefixSelector = JournalSelector.prefix("ops.us-central1.v1/");
@@ -53,11 +45,7 @@ Deno.test("JournalClient.list exclusion selector test", async () => {
   const journals = (await client.list(prefixSelector, excludedSelector))
     .unwrap();
 
-  assertEquals(1, journals.length);
-  assertEquals(
-    "ops.us-central1.v1/logs/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00",
-    journals[0].name,
-  );
+  assertSnapshot(journals.map((j)=>j.name));
 });
 
 Deno.test("JournalClient.list wrong signing key", async () => {
@@ -101,7 +89,7 @@ Deno.test("JournalClient.list unauthorized prefix", async () => {
 snapshotTest("JournalClient.read test", async ({ assertSnapshot }) => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
-  const req = { journal: "acmeCo/greetings/pivot=00", endOffset: "1024" };
+  const req = { journal: "acmeCo/greetings/00ffffffffffffff/pivot=00", endOffset: "1024" };
   const stream = (await client.read(req)).map_err(console.error).unwrap();
   const results: Array<broker.ProtocolReadResponse> = await readStreamToEnd(
     stream,
@@ -127,7 +115,7 @@ snapshotTest("JournalClient.read content test", async ({ assertSnapshot }) => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
   const req = {
-    journal: "acmeCo/greetings/pivot=00",
+    journal: "acmeCo/greetings/00ffffffffffffff/pivot=00",
     offset: "10",
     endOffset: "1024",
   };
@@ -145,7 +133,7 @@ snapshotTest("JournalClient.read Arabic content test", async ({ assertSnapshot }
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
   const req = {
-    journal: "acmeCo/arabic-greetings/pivot=00",
+    journal: "acmeCo/arabic-greetings/00ffffffffffffff/pivot=00",
     offset: "10",
     endOffset: "1024",
   };

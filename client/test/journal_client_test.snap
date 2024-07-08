@@ -1,4 +1,57 @@
 {
+  'JournalClient.list collection selector test': [
+    'acmeCo/greetings/00ffffffffffffff/pivot=00',
+  ],
+  'JournalClient.list exclusion selector test': [
+    'ops.us-central1.v1/logs/00ffffffffffffff/kind=capture/name=acmeCo%2Farabic-source-hello-world/pivot=00',
+    'ops.us-central1.v1/logs/00ffffffffffffff/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00',
+  ],
+  'JournalClient.list name selector test': [
+    'acmeCo/greetings/00ffffffffffffff/pivot=00',
+  ],
+  'JournalClient.list prefix selector test': [
+    'ops.us-central1.v1/logs/00ffffffffffffff/kind=capture/name=acmeCo%2Farabic-source-hello-world/pivot=00',
+    'ops.us-central1.v1/logs/00ffffffffffffff/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00',
+    'ops.us-central1.v1/stats/00ffffffffffffff/kind=capture/name=acmeCo%2Farabic-source-hello-world/pivot=00',
+    'ops.us-central1.v1/stats/00ffffffffffffff/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00',
+  ],
+  'JournalClient.read Arabic content test': [
+    {
+      _meta: {
+        uuid: '[MASKED string]',
+      },
+      message: 'مرحبا #1',
+      ts: '[MASKED string]',
+    },
+    {
+      _meta: {
+        uuid: '[MASKED string]',
+      },
+      message: 'مرحبا #2',
+      ts: '[MASKED string]',
+    },
+    {
+      _meta: {
+        uuid: '[MASKED string]',
+      },
+      message: 'مرحبا #3',
+      ts: '[MASKED string]',
+    },
+    {
+      _meta: {
+        uuid: '[MASKED string]',
+      },
+      message: 'مرحبا #4',
+      ts: '[MASKED string]',
+    },
+    {
+      _meta: {
+        uuid: '[MASKED string]',
+      },
+      message: 'مرحبا #5',
+      ts: '[MASKED string]',
+    },
+  ],
   'JournalClient.read content test': [
     {
       _meta: {
@@ -40,7 +93,7 @@
     {
       status: 'OK',
       fragment: {
-        journal: 'acmeCo/greetings/pivot=00',
+        journal: 'acmeCo/greetings/00ffffffffffffff/pivot=00',
         compressionCodec: 'GZIP',
       },
     },
@@ -51,7 +104,7 @@
     {
       status: 'OK',
       fragment: {
-        journal: 'acmeCo/greetings/pivot=00',
+        journal: 'acmeCo/greetings/00ffffffffffffff/pivot=00',
         compressionCodec: 'GZIP',
       },
     },

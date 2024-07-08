@@ -8,15 +8,16 @@ import { ShardClient } from "../src/shard_client.ts";
 import { ShardSelector } from "../src/selector.ts";
 
 
-Deno.test("ShardClient.list task selector test", async () => {
+snapshotTest("ShardClient.list task selector test", async ({ assertSnapshot }) => {
   const client = new ShardClient(BASE_URL, await makeJwt({}));
   const taskSelector = new ShardSelector().task("acmeCo/source-hello-world");
 
   const shards = (await client.list(taskSelector)).unwrap();
 
+  assertSnapshot(shards);
   assertEquals(1, shards.length);
   assertEquals(
-    "capture/acmeCo/source-hello-world/00000000-00000000",
+    "capture/acmeCo/source-hello-world/00ffffffffffffff/00000000-00000000",
     shards[0].spec.id,
   );
   assertEquals("PRIMARY", shards[0].status[0].code);
@@ -25,7 +26,7 @@ Deno.test("ShardClient.list task selector test", async () => {
 Deno.test("ShardClient.list bare id selector test", async () => {
   const client = new ShardClient(BASE_URL, await makeJwt({}));
   const idSelector = new ShardSelector().id(
-    "capture/acmeCo/source-hello-world/00000000-00000000",
+    "capture/acmeCo/source-hello-world/00ffffffffffffff/00000000-00000000",
   );
 
   const error = (await client.list(idSelector)).unwrap_err();
@@ -39,13 +40,13 @@ Deno.test("ShardClient.list compound id selector test", async () => {
     .task("acmeCo/yet-another-task")
     .task("acmeCo/source-hello-world")
     .task("acmeCo/verifies-label-sorting")
-    .id("capture/acmeCo/source-hello-world/00000000-00000000");
+    .id("capture/acmeCo/source-hello-world/00ffffffffffffff/00000000-00000000");
 
   const shards = (await client.list(idSelector)).unwrap();
 
   assertEquals(1, shards.length);
   assertEquals(
-    "capture/acmeCo/source-hello-world/00000000-00000000",
+    "capture/acmeCo/source-hello-world/00ffffffffffffff/00000000-00000000",
     shards[0].spec.id,
   );
 });
@@ -54,7 +55,7 @@ snapshotTest("ShardClient.stat test", async ({ assertSnapshot }) => {
   const client = new ShardClient(BASE_URL, await makeJwt({prefixes: ["capture/acmeCo/"]}));
 
   const stats = (await client.stat(
-    "capture/acmeCo/source-hello-world/00000000-00000000",
+    "capture/acmeCo/source-hello-world/00ffffffffffffff/00000000-00000000",
     {},
   )).unwrap();
 
@@ -74,8 +75,8 @@ snapshotTest("ShardClient.stat test", async ({ assertSnapshot }) => {
 
   const masks = [
     "/readThrough/acmeCo\/source-hello-world\/txn",
-    "/publishAt/acmeCo\/greetings\/pivot=00",
-    "/publishAt/ops.us-central1.v1\/stats\/kind=capture\/name=acmeCo%2Fsource-hello-world\/pivot=00",
+    "/publishAt/acmeCo\/greetings\/00ffffffffffffff\/pivot=00",
+    "/publishAt/ops.us-central1.v1\/stats\/00ffffffffffffff\/kind=capture\/name=acmeCo%2Fsource-hello-world\/pivot=00",
   ];
   assertSnapshot(pluck(stats), masks);
 });

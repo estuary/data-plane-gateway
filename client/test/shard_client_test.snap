@@ -1,4 +1,70 @@
 {
+  'ShardClient.list task selector test': [
+    {
+      spec: {
+        id: 'capture/acmeCo/source-hello-world/00ffffffffffffff/00000000-00000000',
+        sources: [],
+        recoveryLogPrefix: 'recovery',
+        hintPrefix: '/estuary/flow/hints',
+        hintBackups: 2,
+        maxTxnDuration: '1s',
+        minTxnDuration: '0s',
+        disable: false,
+        hotStandbys: 0,
+        labels: {
+          labels: [
+            {
+              name: 'app.gazette.dev/managed-by',
+              value: 'estuary.dev/flow',
+            },
+            {
+              name: 'estuary.dev/build',
+              value: '0000000000000000',
+            },
+            {
+              name: 'estuary.dev/key-begin',
+              value: '00000000',
+            },
+            {
+              name: 'estuary.dev/key-end',
+              value: 'ffffffff',
+            },
+            {
+              name: 'estuary.dev/log-level',
+              value: 'info',
+            },
+            {
+              name: 'estuary.dev/rclock-begin',
+              value: '00000000',
+            },
+            {
+              name: 'estuary.dev/rclock-end',
+              value: 'ffffffff',
+            },
+            {
+              name: 'estuary.dev/task-name',
+              value: 'acmeCo/source-hello-world',
+            },
+            {
+              name: 'estuary.dev/task-type',
+              value: 'capture',
+            },
+          ],
+        },
+        disableWaitForAck: false,
+        ringBufferSize: 65536,
+        readChannelSize: 4096,
+      },
+      status: [
+        {
+          code: 'FAILED',
+          errors: [
+            'runTransactions: txnStartCommit: store.StartCommit: failed to write atomic RocksDB commit\n\nCaused by:\n    IO error: No such file or directory: While open a file for appending: /home/travis/code/data-plane-gateway/test/tmp/capture_acmeCo_source-hello-world_00ffffffffffffff_00000000-00000000-1644699521/000008.log: No such file or directory',
+          ],
+        },
+      ],
+    },
+  ],
   'ShardClient.stat test': {
     status: 'OK',
     readThrough: {
@@ -6,8 +72,8 @@
       'acmeCo/source-hello-world/eof': 'who cares',
     },
     publishAt: {
-      'acmeCo/greetings/pivot=00': '[MASKED string]',
-      'ops.us-central1.v1/stats/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00': '[MASKED string]',
+      'acmeCo/greetings/00ffffffffffffff/pivot=00': '[MASKED string]',
+      'ops.us-central1.v1/stats/00ffffffffffffff/kind=capture/name=acmeCo%2Fsource-hello-world/pivot=00': '[MASKED string]',
     },
   },
 }
