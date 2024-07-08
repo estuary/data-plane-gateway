@@ -141,6 +141,24 @@ snapshotTest("JournalClient.read content test", async ({ assertSnapshot }) => {
   assertSnapshot(filtered_results, masks);
 });
 
+snapshotTest("JournalClient.read Arabic content test", async ({ assertSnapshot }) => {
+  const client = new JournalClient(BASE_URL, await makeJwt({}));
+
+  const req = {
+    journal: "acmeCo/arabic-greetings/pivot=00",
+    offset: "10",
+    endOffset: "1024",
+  };
+  const stream = (await client.read(req)).unwrap();
+  const docStream = parseJournalDocuments(stream!);
+  const results = await readStreamToEnd(docStream);
+
+  let filtered_results = results.filter(r=>!(r._meta as any).ack).slice(0,5)
+
+  const masks = ["/*/_meta/uuid", "/*/ts"];
+  assertSnapshot(filtered_results, masks);
+});
+
 Deno.test("JournalClient.read unauthorized prefix", async () => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
