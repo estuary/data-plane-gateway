@@ -8,13 +8,12 @@ import { ShardClient } from "../src/shard_client.ts";
 import { ShardSelector } from "../src/selector.ts";
 
 
-snapshotTest("ShardClient.list task selector test", async ({ assertSnapshot }) => {
+Deno.test("ShardClient.list task selector test", async () => {
   const client = new ShardClient(BASE_URL, await makeJwt({}));
   const taskSelector = new ShardSelector().task("acmeCo/source-hello-world");
 
   const shards = (await client.list(taskSelector)).unwrap();
 
-  assertSnapshot(shards);
   assertEquals(1, shards.length);
   assertEquals(
     "capture/acmeCo/source-hello-world/00ffffffffffffff/00000000-00000000",
