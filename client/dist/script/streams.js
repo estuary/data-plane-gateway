@@ -56,7 +56,17 @@ function decodeContent() {
         transform(value, controller) {
             // Base64 decode the `content` field and send it as a chunk.
             if (value.content?.length) {
-                controller.enqueue(atob(value.content));
+                // The `atob` function does not work properly if the decoded content contains any byte
+                // values over 0x7f, because "binary" in JS means that each byte gets represented as a
+                // UTF-16 code unit, which happens to be <= 0xff. I wish I was making this up:
+                // https://developer.mozilla.org/en-US/docs/Glossary/Base64#the_unicode_problem
+                const binary = atob(value.content);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < bytes.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                const text = new TextDecoder().decode(bytes);
+                controller.enqueue(text);
             }
         },
     });
