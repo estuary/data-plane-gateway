@@ -1,169 +1,119 @@
 package main
 
 import (
-	"bytes"
-	context "context"
+	"context"
 	"fmt"
-	"slices"
+	"io"
+	"time"
 
-	"github.com/estuary/data-plane-gateway/auth"
-	"github.com/estuary/flow/go/labels"
-	log "github.com/sirupsen/logrus"
 	pb "go.gazette.dev/core/broker/protocol"
+	"google.golang.org/grpc/metadata"
 )
 
-type JournalAuthServer struct {
-	clientCtx          context.Context
-	journalClient      pb.JournalClient
-	jwtVerificationKey []byte
+type PassThroughAuthorizer struct{}
+
+func (PassThroughAuthorizer) Authorize(ctx context.Context, claims pb.Claims, exp time.Duration) (context.Context, error) {
+	var md, _ = metadata.FromIncomingContext(ctx)
+	var token = md.Get("authorization")
+
+	if len(token) == 0 {
+		return nil, fmt.Errorf("missing required Authorization header")
+	}
+	return metadata.AppendToOutgoingContext(ctx, "authorization", token[0]), nil
 }
 
-func NewJournalAuthServer(ctx context.Context, jwtVerificationKey []byte) *JournalAuthServer {
-	journalClient, err := newJournalClient(ctx, *brokerAddr)
-	if err != nil {
-		log.Fatalf("Failed to connect to broker: %v", err)
-	}
-
-	authServer := &JournalAuthServer{
-		clientCtx:          ctx,
-		journalClient:      journalClient,
-		jwtVerificationKey: jwtVerificationKey,
-	}
-
-	return authServer
+type JournalProxy struct {
+	jc pb.JournalClient
 }
 
-func newJournalClient(ctx context.Context, addr string) (pb.JournalClient, error) {
-	log.Printf("connecting journal client to: %s", addr)
-	conn, err := dialAddress(ctx, addr)
+func (s *JournalProxy) List(req *pb.ListRequest, stream pb.Journal_ListServer) error {
+	var ctx = pb.WithDispatchDefault(stream.Context())
+
+	var proxy, err = s.jc.List(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("error connecting to server: %w", err)
+		return err
 	}
 
-	return pb.NewJournalClient(conn), nil
+	for {
+		if resp, err := proxy.Recv(); err != nil {
+			if err == io.EOF {
+				err = nil // Graceful close.
+			}
+			return err
+		} else if err = stream.Send(resp); err != nil {
+			return err
+		}
+	}
 }
 
-// List implements protocol.JournalServer
-func (s *JournalAuthServer) List(ctx context.Context, req *pb.ListRequest) (*pb.ListResponse, error) {
-	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
+func (s *JournalProxy) ListFragments(ctx context.Context, req *pb.FragmentsRequest) (*pb.FragmentsResponse, error) {
+	return s.jc.ListFragments(pb.WithDispatchDefault(ctx), req)
+}
+
+func (s *JournalProxy) Read(req *pb.ReadRequest, stream pb.Journal_ReadServer) error {
+	var ctx = stream.Context()
+
+	var proxy, err = s.jc.Read(pb.WithDispatchDefault(ctx), req)
 	if err != nil {
-		return nil, err
+		return err
 	}
+
+	for {
+		if resp, err := proxy.Recv(); err != nil {
+			if err == io.EOF {
+				err = nil // Graceful close.
+			}
+			return err
+		} else if err = stream.Send(resp); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *JournalProxy) Append(stream pb.Journal_AppendServer) error {
+	var ctx = stream.Context()
+
+	var req, err = stream.Recv()
+	if err != nil {
+		return err
+	}
+
+	ctx = pb.WithClaims(ctx, pb.Claims{
+		Capability: pb.Capability_APPEND,
+		Selector: pb.LabelSelector{
+			Include: pb.MustLabelSet("name", req.Journal.String()),
+		},
+	})
 	ctx = pb.WithDispatchDefault(ctx)
 
-	// Is the user listing (only) ops collections?
-	var requested = req.Selector.Include.ValuesOf(labels.Collection)
-	var isOpsListing = len(requested) != 0
-	for _, r := range requested {
-		isOpsListing = isOpsListing && slices.Contains(allOpsCollections, r)
-	}
-
-	// Special-case listings of ops collections.
-	// We list all journals, and then filter to those that the user may access.
-	if isOpsListing {
-		var resp, err = s.journalClient.List(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-
-		// Filter journals to those the user has access to.
-		var filtered []pb.ListResponse_Journal
-		for _, j := range resp.Journals {
-			if isAllowedOpsJournal(claims, j.Spec.Name) {
-				filtered = append(filtered, j)
-			}
-		}
-		resp.Journals = filtered
-		return resp, nil
-	}
-
-	err = auth.EnforceSelectorPrefix(claims, req.Selector)
-	if err != nil {
-		return nil, fmt.Errorf("Unauthorized: %w", err)
-	}
-
-	return s.journalClient.List(ctx, req)
-}
-
-// ListFragments implements protocol.JournalServer
-func (s *JournalAuthServer) ListFragments(ctx context.Context, req *pb.FragmentsRequest) (*pb.FragmentsResponse, error) {
-	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
-	if err != nil {
-		return nil, err
-	}
-
-	err = auth.EnforcePrefix(claims, req.Journal.String())
-	if err != nil {
-		if !isAllowedOpsJournal(claims, req.Journal) {
-			return nil, fmt.Errorf("Unauthorized: %w", err)
-		}
-	}
-
-	return s.journalClient.ListFragments(ctx, req)
-}
-
-// Read implements protocol.JournalServer
-func (s *JournalAuthServer) Read(req *pb.ReadRequest, readServer pb.Journal_ReadServer) error {
-	ctx := readServer.Context()
-
-	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
+	proxy, err := s.jc.Append(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = auth.EnforcePrefix(claims, req.Journal.String())
-	if err != nil {
-		if !isAllowedOpsJournal(claims, req.Journal) {
-			return fmt.Errorf("Unauthorized: %w", err)
+	for {
+		if err = proxy.Send(req); err != nil {
+			return err
+		} else if req, err = stream.Recv(); err == io.EOF {
+			break
+		} else if err != nil {
+			return err
 		}
 	}
+	resp, err := proxy.CloseAndRecv()
 
-	readClient, err := s.journalClient.Read(ctx, req)
-	if err != nil {
-		return err
+	if err == nil {
+		err = stream.SendAndClose(resp)
 	}
-
-	return proxyStream(ctx, "/protocol.Journal/Read", readServer, readClient, new(pb.ReadRequest), new(pb.ReadResponse))
+	return err
 }
 
-// We're currently only implementing the read-only RPCs for protocol.JournalServer.
-func (s *JournalAuthServer) Append(pb.Journal_AppendServer) error {
-	return fmt.Errorf("Unsupported operation: `Append`")
-}
-func (s *JournalAuthServer) Apply(context.Context, *pb.ApplyRequest) (*pb.ApplyResponse, error) {
-	return nil, fmt.Errorf("Unsupported operation: `Apply`")
-}
-func (s *JournalAuthServer) Replicate(pb.Journal_ReplicateServer) error {
-	return fmt.Errorf("Unsupported operation: `Replicate`")
+func (s *JournalProxy) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {
+	return s.jc.Apply(pb.WithDispatchDefault(ctx), req)
 }
 
-// TODO(johnny): This authorization check is an encapsulated hack that allows
-// ops logs and stats to be read-able by end users.
-// It's a placeholder for a missing partition-level authorization feature.
-func isAllowedOpsJournal(claims *auth.AuthorizedClaims, journal pb.Journal) bool {
-	var b = make([]byte, 256)
-
-	for _, oc := range allOpsCollections {
-		for _, kind := range []string{"capture", "derivation", "materialization"} {
-			for _, prefix := range claims.Prefixes {
-				b = append(b[:0], oc...)
-				b = append(b, "/kind="...)
-				b = append(b, kind...)
-				b = append(b, "/name="...)
-				b = labels.EncodePartitionValue(b, prefix)
-
-				if bytes.HasPrefix([]byte(journal), b) {
-					return true
-				}
-			}
-		}
-	}
-	return false
+func (s *JournalProxy) Replicate(pb.Journal_ReplicateServer) error {
+	return fmt.Errorf("unsupported operation: `Replicate`")
 }
 
-var allOpsCollections = []string{
-	"ops.us-central1.v1/logs",
-	"ops.us-central1.v1/stats",
-}
-
-var _ pb.JournalServer = &JournalAuthServer{}
+var _ pb.JournalServer = &JournalProxy{}

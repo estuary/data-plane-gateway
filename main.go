@@ -3,129 +3,165 @@ package main
 import (
 	context "context"
 	"crypto/tls"
-	"flag"
-	"fmt"
-	"net/http"
-	"net/http/pprof"
-	"net/url"
 	"os"
-	"strconv"
-	"strings"
+	"os/signal"
+	"syscall"
 
-	"github.com/estuary/data-plane-gateway/proxy"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/jamiealquiza/envy"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/estuary/flow/go/network"
+	pf "github.com/estuary/flow/go/protocols/flow"
+	"github.com/gogo/gateway"
+	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
+	"go.gazette.dev/core/auth"
 	pb "go.gazette.dev/core/broker/protocol"
 	pc "go.gazette.dev/core/consumer/protocol"
+	mbp "go.gazette.dev/core/mainboilerplate"
+	"go.gazette.dev/core/server"
 	"go.gazette.dev/core/task"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
-	"google.golang.org/grpc"
+
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 )
 
-var (
-	logLevel            = flag.String("log.level", "info", "Verbosity of logging")
-	brokerAddr          = flag.String("broker-address", "localhost:8080", "Target broker address")
-	consumerAddr        = flag.String("consumer-address", "localhost:9000", "Target consumer address")
-	inferenceAddr       = flag.String("inference-address", "localhost:9090", "Target schema inference service address")
-	corsOrigin          = flag.String("cors-origin", "*", "CORS Origin")
-	controlPlaneAuthUrl = flag.String("control-plane-auth-url", "", "base url to use for redirecting unauthorized requests")
-	jwtVerificationKey  = flag.String("verification-key", "supersecret", "Key used to verify JWTs signed by the Flow Control Plane")
-	// Plain port is meant to be exposed to the public internet. It serves the REST endpoints, so that
-	// it's usable for local development without shenanigans for dealing with the self-signed cert.
-	// It also serves the ACME challenges for provisioning TLS certs. It does not serve gRPC.
-	plainPort = flag.String("plain-port", "28317", "Port for unencrypted communication")
-	// TLS port serves the REST endpoints and gRPC. The bread and butter, if you will.
-	tlsPort = flag.String("port", "28318", "Service port for HTTPS and gRPC requests. Port may also take the form 'unix:///path/to/socket' to use a Unix Domain Socket")
-	// We listen on 3 separate ports because the "plain-port" needs to be exposed to the public internet, and we
-	// don't want to serve metrics or debug endpoints to just anyone. This port serves metrics and debug
-	// endpoints only. It is not intended to ever be exposed to the public internet.
-	debugPort = flag.String("debug-port", "28316", "Port for serving metrics and debug endpoints")
-	zone      = flag.String("zone", "local", "Availability zone within which this process is running")
+// Config is the top-level configuration object of data-plane-gateway.
+var Config = new(struct {
+	Broker struct {
+		mbp.AddressConfig
+	} `group:"Broker" namespace:"broker" env-namespace:"BROKER"`
 
-	hostname = flag.String("hostname", "localhost", "The hostname that clients use to connect to the gateway")
+	Consumer struct {
+		mbp.AddressConfig
+	} `group:"Consumer" namespace:"consumer" env-namespace:"CONSUMER"`
 
-	// Args for providing the tls certificate the old fashioned way
-	tls_cert        = flag.String("tls-certificate", "", "Path to the TLS certificate (.crt) to use.")
-	tls_private_key = flag.String("tls-private-key", "", "The private key for the TLS certificate")
-)
+	Gateway struct {
+		mbp.ServiceConfig
+	} `group:"Gateway" namespace:"gateway" env-namespace:"GATEWAY"`
 
-var corsConfig *corsSettings
+	Flow struct {
+		ControlAPI    pb.Endpoint `long:"control-api" env:"CONTROL_API" description:"Address of the control-plane API"`
+		Dashboard     pb.Endpoint `long:"dashboard" env:"DASHBOARD" description:"Address of the Estuary dashboard"`
+		DataPlaneFQDN string      `long:"data-plane-fqdn" env:"DATA_PLANE_FQDN" description:"Fully-qualified domain name of the data-plane to which this reactor belongs"`
+	} `group:"flow" namespace:"flow" env-namespace:"FLOW"`
 
-func main() {
-	flag.Parse()
-	envy.Parse("GATEWAY")
-	var lvl, err = log.ParseLevel(*logLevel)
-	if err != nil {
-		panic(fmt.Sprintf("failed to parse log level: '%s', %v", *logLevel, err))
-	}
-	log.SetLevel(lvl)
-	log.SetFormatter(&log.JSONFormatter{})
+	Log         mbp.LogConfig         `group:"Logging" namespace:"log" env-namespace:"LOG"`
+	Diagnostics mbp.DiagnosticsConfig `group:"Debug" namespace:"debug" env-namespace:"DEBUG"`
+})
 
-	grpc.EnableTracing = true
-	grpc_prometheus.EnableHandlingTimeHistogram()
-	grpc_prometheus.EnableClientHandlingTimeHistogram()
+const iniFilename = "data-plane-gateway.ini"
 
-	if *tls_cert == "" {
-		log.Fatal("TLS is required in order to run data-plane-gateway. Missing TLS arguments")
-	}
-	if *tls_private_key == "" {
-		log.Fatal("must supply --tls-private-key with --tls-certificate")
-	}
+type cmdServe struct{}
 
-	crt, err := tls.LoadX509KeyPair(*tls_cert, *tls_private_key)
-	if err != nil {
-		log.Fatalf("failed to load tls certificate: %v", err)
-	}
-	log.Info("loaded tls certificate")
-	var certificates = []tls.Certificate{crt}
+func (cmdServe) Execute(args []string) error {
+	defer mbp.InitDiagnosticsAndRecover(Config.Diagnostics)()
+	mbp.InitLog(Config.Log)
 
-	tlsPortNum, err := strconv.ParseUint(*tlsPort, 10, 16)
-	if err != nil {
-		log.Fatalf("invalid tls port number: '%s': %w", *tlsPort, err)
+	log.WithFields(log.Fields{
+		"config":    Config,
+		"version":   mbp.Version,
+		"buildDate": mbp.BuildDate,
+	}).Info("data-plane-gateway configuration")
+	pb.RegisterGRPCDispatcher(Config.Gateway.Zone)
+
+	var shardKeys, err = auth.NewKeyedAuth(Config.Consumer.AuthKeys)
+	mbp.Must(err, "failed to parse consumer auth keys")
+
+	var serverTLS *tls.Config
+	var tap = network.NewTap()
+
+	if Config.Gateway.ServerCertFile != "" {
+		serverTLS, err = server.BuildTLSConfig(
+			Config.Gateway.ServerCertFile, Config.Gateway.ServerCertKeyFile, "")
+		mbp.Must(err, "building server TLS config")
 	}
 
-	// TODO: this sets a global that's used in rest.go :( Can we fix that?
-	corsConfig = NewCorsSettings(*corsOrigin)
-
-	pb.RegisterGRPCDispatcher(*zone)
-	var grpcServer = grpc.NewServer(
-		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
+	// Bind our server listener, grabbing a random available port if Port is zero.
+	srv, err := server.New(
+		"",
+		Config.Gateway.Host,
+		Config.Gateway.Port,
+		serverTLS,
+		nil,
+		Config.Gateway.MaxGRPCRecvSize,
+		tap.Wrap,
 	)
-	grpc_prometheus.Register(grpcServer)
+	mbp.Must(err, "building Server instance")
 
-	ctx := pb.WithDispatchDefault(context.Background())
-	var tasks = task.NewGroup(ctx)
+	var (
+		ctx        = context.Background()
+		brokerConn = Config.Broker.MustDial(ctx)
+		shardConn  = Config.Consumer.MustDial(ctx)
+		signalCh   = make(chan os.Signal, 1)
+		tasks      = task.NewGroup(ctx)
 
-	journalServer := NewJournalAuthServer(ctx, []byte(*jwtVerificationKey))
-	shardServer := NewShardAuthServer(ctx, []byte(*jwtVerificationKey))
-	pb.RegisterJournalServer(grpcServer, journalServer)
-	pc.RegisterShardServer(grpcServer, shardServer)
+		journalClient = pb.NewAuthJournalClient(
+			pb.NewJournalClient(brokerConn),
+			PassThroughAuthorizer{},
+		)
+		shardClient = pc.NewAuthShardClient(
+			pc.NewShardClient(shardConn),
+			PassThroughAuthorizer{},
+		)
+	)
+	srv.QueueTasks(tasks)
 
-	// Will be used with all listeners.
-	var healthHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte("OK\n"))
+	// Register proxying gRPC server.
+	pb.RegisterJournalServer(srv.GRPCServer, &JournalProxy{journalClient})
+	pc.RegisterShardServer(srv.GRPCServer, &ShardProxy{shardClient})
+
+	// Register gRPC web gateway.
+	var mux *runtime.ServeMux = runtime.NewServeMux(
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &gateway.JSONPb{EmitDefaults: true}),
+		runtime.WithProtoErrorHandler(runtime.DefaultHTTPProtoErrorHandler),
+	)
+	pb.RegisterJournalHandler(tasks.Context(), mux, brokerConn)
+	pc.RegisterShardHandler(tasks.Context(), mux, shardConn)
+	srv.HTTPMux.Handle("/v1/", Config.Gateway.CORSWrapper(mux))
+
+	// Initialize connector networking frontend.
+	networkProxy, err := network.NewFrontend(
+		tap,
+		Config.Gateway.Host,
+		Config.Flow.ControlAPI.URL(),
+		Config.Flow.Dashboard.URL(),
+		pf.NewAuthNetworkProxyClient(pf.NewNetworkProxyClient(shardConn), shardKeys),
+		pc.NewAuthShardClient(pc.NewShardClient(shardConn), shardKeys),
+		shardKeys,
+	)
+	mbp.Must(err, "failed to build network proxy")
+
+	tasks.Queue("network-proxy-frontend", func() error {
+		return networkProxy.Serve(tasks.Context())
 	})
 
-	restHandler := NewRestServer(ctx, fmt.Sprintf("localhost:%s", *tlsPort))
-	schemaInferenceHandler := NewSchemaInferenceServer(ctx)
+	// Install signal handler & start gateway tasks.
+	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
+	tasks.Queue("handle-signal", func() error {
+		<-signalCh
+		log.Info("caught signal; exiting")
+		return nil
+	})
 
-	// These routes will be exposed to the public internet and used for handling both http and https requests.
-	publicMux := http.NewServeMux()
-	publicMux.Handle("/healthz", healthHandler)
-	publicMux.Handle("/infer_schema", schemaInferenceHandler)
-	publicMux.Handle("/", restHandler)
+	// Block until all tasks complete. Assert none returned an error.
+	tasks.GoRun()
+	mbp.Must(tasks.Wait(), "data-plane-gateway task failed")
+	log.Info("goodbye")
 
-	if *controlPlaneAuthUrl == "" {
-		log.Fatalf("missing required argument control-plane-auth-url")
-	}
-	cpAuthUrl, err := url.Parse(*controlPlaneAuthUrl)
-	if err != nil {
-		log.Fatalf("invalid control-plane-auth-url: %v", err)
-	}
+	return nil
+}
+
+func main() {
+	var parser = flags.NewParser(Config, flags.Default)
+
+	_, _ = parser.AddCommand("serve", "Serve as Gazette broker", `
+Serve a Gazette broker with the provided configuration, until signaled to
+exit (via SIGTERM). Upon receiving a signal, the broker will seek to discharge
+its responsible journals and will exit only when it can safely do so.
+`, &cmdServe{})
+
+	mbp.AddPrintConfigCmd(parser, iniFilename)
+	mbp.MustParseConfig(parser, iniFilename)
+}
+
+/*
 
 	proxyServer, tappedListener, err := proxy.NewTlsProxyServer(*hostname, uint16(tlsPortNum), certificates, shardServer.shardClient, *cpAuthUrl, []byte(*jwtVerificationKey))
 
@@ -195,3 +231,4 @@ func main() {
 	log.Println("goodbye")
 	os.Exit(0)
 }
+*/
