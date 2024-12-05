@@ -2,87 +2,31 @@ package main
 
 import (
 	context "context"
-	"fmt"
 
-	"github.com/estuary/data-plane-gateway/auth"
-	log "github.com/sirupsen/logrus"
+	pb "go.gazette.dev/core/broker/protocol"
 	pc "go.gazette.dev/core/consumer/protocol"
 )
 
-type ShardAuthServer struct {
-	clientCtx          context.Context
-	shardClient        pc.ShardClient
-	jwtVerificationKey []byte
+type ShardProxy struct {
+	sc pc.ShardClient
 }
 
-func NewShardAuthServer(ctx context.Context, jwtVerificationKey []byte) *ShardAuthServer {
-	shardClient, err := newShardClient(ctx, *consumerAddr)
-	if err != nil {
-		log.Fatalf("Failed to connect to consumer: %v", err)
-	}
-
-	authServer := &ShardAuthServer{
-		clientCtx:          ctx,
-		shardClient:        shardClient,
-		jwtVerificationKey: jwtVerificationKey,
-	}
-
-	return authServer
+func (s *ShardProxy) List(ctx context.Context, req *pc.ListRequest) (*pc.ListResponse, error) {
+	return s.sc.List(pb.WithDispatchDefault(ctx), req)
 }
 
-func newShardClient(ctx context.Context, addr string) (pc.ShardClient, error) {
-	var entry = log.WithField("address", addr)
-	entry.Debug("starting to connect shard client")
-	conn, err := dialAddress(ctx, addr)
-	if err != nil {
-		return nil, fmt.Errorf("error connecting to server: %w", err)
-	}
-
-	entry.Info("successfully connected shard client")
-	return pc.NewShardClient(conn), nil
+func (s *ShardProxy) Stat(ctx context.Context, req *pc.StatRequest) (*pc.StatResponse, error) {
+	return s.sc.Stat(pb.WithDispatchDefault(ctx), req)
 }
 
-// List implements protocol.ShardServer
-func (s *ShardAuthServer) List(ctx context.Context, req *pc.ListRequest) (*pc.ListResponse, error) {
-	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
-	if err != nil {
-		return nil, err
-	}
-
-	err = auth.EnforceSelectorPrefix(claims, req.Selector)
-	if err != nil {
-		return nil, fmt.Errorf("Unauthorized: %w", err)
-	}
-
-	return s.shardClient.List(ctx, req)
-
+func (s *ShardProxy) Apply(ctx context.Context, req *pc.ApplyRequest) (*pc.ApplyResponse, error) {
+	return s.sc.Apply(pb.WithDispatchDefault(ctx), req)
+}
+func (s *ShardProxy) GetHints(ctx context.Context, req *pc.GetHintsRequest) (*pc.GetHintsResponse, error) {
+	return s.sc.GetHints(pb.WithDispatchDefault(ctx), req)
+}
+func (s *ShardProxy) Unassign(ctx context.Context, req *pc.UnassignRequest) (*pc.UnassignResponse, error) {
+	return s.sc.Unassign(pb.WithDispatchDefault(ctx), req)
 }
 
-// Stat implements protocol.ShardServer
-func (s *ShardAuthServer) Stat(ctx context.Context, req *pc.StatRequest) (*pc.StatResponse, error) {
-	claims, err := auth.AuthenticateGrpcReq(ctx, s.jwtVerificationKey)
-	if err != nil {
-		return nil, err
-	}
-
-	err = auth.EnforcePrefix(claims, req.Shard.String())
-	if err != nil {
-		return nil, fmt.Errorf("Unauthorized: %w", err)
-	}
-
-	return s.shardClient.Stat(ctx, req)
-
-}
-
-// We're currently only implementing the read-only RPCs for protocol.ShardServer.
-func (s *ShardAuthServer) Apply(context.Context, *pc.ApplyRequest) (*pc.ApplyResponse, error) {
-	return nil, fmt.Errorf("Unsupported operation: `Apply`")
-}
-func (s *ShardAuthServer) GetHints(context.Context, *pc.GetHintsRequest) (*pc.GetHintsResponse, error) {
-	return nil, fmt.Errorf("Unsupported operation: `GetHints`")
-}
-func (s *ShardAuthServer) Unassign(context.Context, *pc.UnassignRequest) (*pc.UnassignResponse, error) {
-	return nil, fmt.Errorf("Unsupported operation: `Unassign`")
-}
-
-var _ pc.ShardServer = &ShardAuthServer{}
+var _ pc.ShardServer = &ShardProxy{}

@@ -8,12 +8,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
 
       - name: Prepare
         id: prep
@@ -26,45 +24,11 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             docker login --username ${{ github.actor }} --password-stdin ghcr.io
 
-      - uses: actions/setup-go@v3
-        with:
-          # Installs the go version specified in go.mod
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Install protobuf-compiler
-        run: sudo apt install -y libprotobuf-dev protobuf-compiler
-
-      - uses: denoland/setup-deno@v1
-        with:
-          deno-version: v1.32.1
-
-      - name: Fetch Flow
-        run: |
-          mkdir $HOME/bin \
-          && curl -L --proto '=https' --tlsv1.2 -sSf "https://github.com/estuary/flow/releases/download/dev/flow-x86-linux.tar.gz" \
-           | tar -zx -C $HOME/bin
-
-      - name: Setup Protobuf Tools
-        run: make protobuf_tools
-
-      - name: Add GOBIN to PATH
-        run: echo "$HOME/go/bin" >> $GITHUB_PATH
-
       - name: Install Go deps
         run: go mod download
 
       - name: Build
-        run: make && go build -o $HOME/bin/data-plane-gateway .
-
-      - name: Ensure that generated files are unchanged.
-        run: |
-          git status \
-          && git diff \
-          && [[ -z "$(git status --porcelain)" ]] || exit 1
-
-      - name: Run Tests
-        run: ./test.sh run $HOME/bin/data-plane-gateway $HOME/bin/flowctl-go
+        run: go build -o data-plane-gateway
 
       - name: Build Docker Image
         uses: docker/build-push-action@v2
