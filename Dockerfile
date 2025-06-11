@@ -3,6 +3,9 @@ FROM ubuntu:24.04
 WORKDIR /app
 ENV PATH="/app:$PATH"
 
+# Install ca-certificates
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Bring in the compiled artifact from the builder.
 COPY data-plane-gateway ./
 
