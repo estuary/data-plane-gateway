@@ -15,26 +15,26 @@ snapshotTest("JournalClient.list collection selector test", async ({assertSnapsh
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
   const name = new JournalSelector().collection("acmeCo/greetings");
-  const journals = (await client.list(name)).unwrap();
+  const response = (await client.list(name)).unwrap();
 
-  assertSnapshot(journals.map((j)=>j.name));
+  assertSnapshot((response.journals ?? []).map((j) => j.spec?.name));
 });
 
 snapshotTest("JournalClient.list name selector test", async ({assertSnapshot}) => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
 
   const name = new JournalSelector().name("acmeCo/greetings/00ffffffffffffff/pivot=00");
-  const journals = (await client.list(name)).unwrap();
+  const response = (await client.list(name)).unwrap();
 
-  assertSnapshot(journals.map((j)=>j.name));
+  assertSnapshot((response.journals ?? []).map((j) => j.spec?.name));
 });
 
 snapshotTest("JournalClient.list prefix selector test", async ({assertSnapshot}) => {
   const client = new JournalClient(BASE_URL, await makeJwt({}));
   const prefixSelector = JournalSelector.prefix("ops.us-central1.v1/");
-  const journals = (await client.list(prefixSelector)).unwrap();
+  const response = (await client.list(prefixSelector)).unwrap();
 
-  assertSnapshot(journals.map((j)=>j.name));
+  assertSnapshot((response.journals ?? []).map((j) => j.spec?.name));
 });
 
 snapshotTest("JournalClient.list exclusion selector test", async ({assertSnapshot}) => {
@@ -42,10 +42,10 @@ snapshotTest("JournalClient.list exclusion selector test", async ({assertSnapsho
 
   const prefixSelector = JournalSelector.prefix("ops.us-central1.v1/");
   const excludedSelector = new JournalSelector().collection("ops.us-central1.v1/stats");
-  const journals = (await client.list(prefixSelector, excludedSelector))
+  const response = (await client.list(prefixSelector, excludedSelector))
     .unwrap();
 
-  assertSnapshot(journals.map((j)=>j.name));
+  assertSnapshot((response.journals ?? []).map((j) => j.spec?.name));
 });
 
 Deno.test("JournalClient.list wrong signing key", async () => {
