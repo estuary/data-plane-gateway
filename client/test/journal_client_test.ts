@@ -9,6 +9,7 @@ import * as broker from "../src/gen/broker/protocol/broker.ts";
 import { BASE_URL, makeJwt } from "./test_support.ts";
 import { JournalClient, parseJournalDocuments } from "../src/journal_client.ts";
 import { JournalSelector } from "../src/selector.ts";
+import { ResponseError } from "../src/util.ts";
 import { readStreamToEnd } from "../src/streams.ts";
 
 snapshotTest("JournalClient.list collection selector test", async ({assertSnapshot}) => {
@@ -157,4 +158,25 @@ Deno.test("JournalClient.read unauthorized prefix", async () => {
   const error = (await client.read(req)).unwrap_err();
 
   assertMatch(error.body.message!, new RegExp("Unauthorized: you are not authorized to access this resource"));
+});
+
+// Nothing listens on port 1, so `fetch` rejects and no response ever exists.
+Deno.test("JournalClient.read unreachable broker", async () => {
+  const client = new JournalClient(
+    new URL("http://127.0.0.1:1/"),
+    await makeJwt({}),
+  );
+
+  const req = {
+    journal: "acmeCo/greetings/00ffffffffffffff/pivot=00",
+    endOffset: "1024",
+  };
+  const error = (await client.read(req)).unwrap_err();
+
+  assertEquals(error.status, ResponseError.NETWORK_FAILURE_STATUS);
+  assertEquals(error.response, undefined);
+  assertMatch(
+    error.body.message!,
+    new RegExp("Could not reach http://127.0.0.1:1/v1/journals/read"),
+  );
 });
