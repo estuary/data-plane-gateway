@@ -10,6 +10,7 @@ export declare class ResponseError {
     private constructor();
     static fromResponse(response: Response): Promise<ResponseError>;
     static fromStreamResponse(response: Response): Promise<ResponseError>;
+    static fromStreamError(error: broker.RuntimeStreamError, response: Response): ResponseError;
 }
 export declare type sortFn<T> = (a: T, b: T) => number;
 export declare function sortBy<T, K extends keyof T>(...fields: Array<K>): sortFn<T>;

@@ -5,6 +5,7 @@ import { Result } from "./result.js";
 import {
   decodeContent,
   parseJSONStream,
+  readStreamToEnd,
   splitStream,
   unwrapResult,
 } from "./streams.js";
@@ -21,7 +22,7 @@ export class JournalClient {
   async list(
     include: JournalSelector = new JournalSelector(),
     exclude: JournalSelector = new JournalSelector(),
-  ): Promise<Result<Array<broker.ProtocolJournalSpec>, ResponseError>> {
+  ): Promise<Result<broker.ProtocolListResponse, ResponseError>> {
     const url = `${this.baseUrl.toString()}v1/journals/list`;
     const body = {
       selector: {
@@ -33,10 +34,41 @@ export class JournalClient {
     const result = await doFetch(url, this.authToken, body);
 
     if (result.ok()) {
-      const data: broker.ProtocolListResponse = await result.unwrap().json();
-      return Result.Ok(data.journals!.map((j) => j.spec!));
+      // The List RPC is server-streaming: a large listing arrives as multiple
+      // newline-delimited `{ result: ListResponse }` frames, because the broker
+      // caps the number of journals per frame. Drain the stream and merge every
+      // frame's journals into one response. Once the first frame is sent, the
+      // HTTP status is already 200, so a later failure arrives as an
+      // `{ error: ... }` frame and must fail the whole listing.
+      const response = result.unwrap();
+      const stream = response.body!
+        .pipeThrough(new TextDecoderStream())
+        .pipeThrough(splitStream("\n"))
+        .pipeThrough(parseJSONStream());
+
+      const frames: Array<{
+        result?: broker.ProtocolListResponse;
+        error?: broker.RuntimeStreamError;
+      }> = await readStreamToEnd(stream);
+
+      const failed = frames.find((frame) => frame.error);
+      if (failed) {
+        return Result.Err(
+          ResponseError.fromStreamError(failed.error!, response),
+        );
+      }
+
+      const merged: broker.ProtocolListResponse = {
+        status: frames[0]?.result?.status,
+        header: frames[0]?.result?.header,
+        journals: frames.flatMap((frame) => frame.result?.journals ?? []),
+      };
+
+      return Result.Ok(merged);
     } else {
-      return Result.Err(await ResponseError.fromResponse(result.unwrap_err()));
+      return Result.Err(
+        await ResponseError.fromStreamResponse(result.unwrap_err()),
+      );
     }
   }
 
