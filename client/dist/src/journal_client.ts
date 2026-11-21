@@ -37,23 +37,31 @@ export class JournalClient {
       // The List RPC is server-streaming: a large listing arrives as multiple
       // newline-delimited `{ result: ListResponse }` frames, because the broker
       // caps the number of journals per frame. Drain the stream and merge every
-      // frame's journals into one response, mirroring how `read()` consumes a
-      // stream. `unwrapResult()` strips the `{ result: ... }` envelope, so each
-      // chunk is a bare ListResponse.
-      const stream = result.unwrap().body!
+      // frame's journals into one response. Once the first frame is sent, the
+      // HTTP status is already 200, so a later failure arrives as an
+      // `{ error: ... }` frame and must fail the whole listing.
+      const response = result.unwrap();
+      const stream = response.body!
         .pipeThrough(new TextDecoderStream())
         .pipeThrough(splitStream("\n"))
-        .pipeThrough(parseJSONStream())
-        .pipeThrough(unwrapResult());
+        .pipeThrough(parseJSONStream());
 
-      const frames: Array<broker.ProtocolListResponse> = await readStreamToEnd(
-        stream,
-      );
+      const frames: Array<{
+        result?: broker.ProtocolListResponse;
+        error?: broker.RuntimeStreamError;
+      }> = await readStreamToEnd(stream);
+
+      const failed = frames.find((frame) => frame.error);
+      if (failed) {
+        return Result.Err(
+          ResponseError.fromStreamError(failed.error!, response),
+        );
+      }
 
       const merged: broker.ProtocolListResponse = {
-        status: frames[0]?.status,
-        header: frames[0]?.header,
-        journals: frames.flatMap((frame) => frame?.journals ?? []),
+        status: frames[0]?.result?.status,
+        header: frames[0]?.result?.header,
+        journals: frames.flatMap((frame) => frame.result?.journals ?? []),
       };
 
       return Result.Ok(merged);

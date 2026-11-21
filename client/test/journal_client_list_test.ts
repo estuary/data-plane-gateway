@@ -57,3 +57,35 @@ Deno.test("JournalClient.list merges frames across network chunks", async () => 
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("JournalClient.list fails on an error frame after the first frame", async () => {
+  const error = {
+    grpcCode: 4,
+    httpCode: 504,
+    message: "context deadline exceeded",
+    httpStatus: "Gateway Timeout",
+  };
+  const body = [
+    {
+      result: { journals: [{ spec: { name: "acmeCo/greetings/journal-0" } }] },
+    },
+    { error },
+  ].map((frame) => JSON.stringify(frame) + "\n").join("");
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = () => Promise.resolve(new Response(body));
+
+  try {
+    const client = new JournalClient(
+      new URL("https://example.test/"),
+      "test-token",
+    );
+    const response = await client.list(
+      new JournalSelector().collection("acmeCo/greetings"),
+    );
+
+    assertEquals(response.unwrap_err().body, error);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

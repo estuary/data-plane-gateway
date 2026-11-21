@@ -62,6 +62,9 @@ export class ResponseError {
         const status = body.error.httpStatus;
         return new ResponseError(body.error, response, status);
     }
+    static fromStreamError(error, response) {
+        return new ResponseError(error, response, error.httpStatus);
+    }
 }
 export function sortBy(...fields) {
     return (a, b) => {
