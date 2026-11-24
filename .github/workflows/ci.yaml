@@ -7,6 +7,22 @@ on:
     branches: [main]
 
 jobs:
+  client:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v1.42.1
+
+      - name: Test client
+        run: deno test client/test/journal_client_list_test.ts
+
   build:
     runs-on: ubuntu-24.04
     steps:

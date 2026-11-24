@@ -32,11 +32,31 @@ class JournalClient {
         };
         const result = await (0, util_js_1.doFetch)(url, this.authToken, body);
         if (result.ok()) {
-            const data = await result.unwrap().json();
-            return result_js_1.Result.Ok(data.journals.map((j) => j.spec));
+            // The List RPC is server-streaming: a large listing arrives as multiple
+            // newline-delimited `{ result: ListResponse }` frames, because the broker
+            // caps the number of journals per frame. Drain the stream and merge every
+            // frame's journals into one response. Once the first frame is sent, the
+            // HTTP status is already 200, so a later failure arrives as an
+            // `{ error: ... }` frame and must fail the whole listing.
+            const response = result.unwrap();
+            const stream = response.body
+                .pipeThrough(new TextDecoderStream())
+                .pipeThrough((0, streams_js_1.splitStream)("\n"))
+                .pipeThrough((0, streams_js_1.parseJSONStream)());
+            const frames = await (0, streams_js_1.readStreamToEnd)(stream);
+            const failed = frames.find((frame) => frame.error);
+            if (failed) {
+                return result_js_1.Result.Err(util_js_1.ResponseError.fromStreamError(failed.error, response));
+            }
+            const merged = {
+                status: frames[0]?.result?.status,
+                header: frames[0]?.result?.header,
+                journals: frames.flatMap((frame) => frame.result?.journals ?? []),
+            };
+            return result_js_1.Result.Ok(merged);
         }
         else {
-            return result_js_1.Result.Err(await util_js_1.ResponseError.fromResponse(result.unwrap_err()));
+            return result_js_1.Result.Err(await util_js_1.ResponseError.fromStreamResponse(result.unwrap_err()));
         }
     }
     async read(req) {

@@ -67,6 +67,9 @@ class ResponseError {
         const status = body.error.httpStatus;
         return new ResponseError(body.error, response, status);
     }
+    static fromStreamError(error, response) {
+        return new ResponseError(error, response, error.httpStatus);
+    }
 }
 exports.ResponseError = ResponseError;
 function sortBy(...fields) {

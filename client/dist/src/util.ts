@@ -65,6 +65,13 @@ export class ResponseError {
 
     return new ResponseError(body.error, response, status);
   }
+
+  static fromStreamError(
+    error: broker.RuntimeStreamError,
+    response: Response,
+  ): ResponseError {
+    return new ResponseError(error, response, error.httpStatus!);
+  }
 }
 
 export type sortFn<T> = (a: T, b: T) => number;
